@@ -1,7 +1,7 @@
 node_modules
 **/node_modules
 frontend/dist
-public
+/public
 backend/tests
 backend/.env
 .env
