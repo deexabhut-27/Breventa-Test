@@ -83,7 +83,7 @@ export function createApp() {
   app.use('/api', notFound);
 
   // Optionally serve the built frontend from the same origin (recommended for production).
-  const dist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../public');
+  const dist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../frontend/dist');
   if (env.isProduction && fs.existsSync(dist)) {
     app.use(express.static(dist, { index: false, maxAge: '1h' }));
     app.get(/^\/(?!api).*/, (_req, res) => res.sendFile(path.join(dist, 'index.html')));

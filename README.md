@@ -45,8 +45,8 @@ npm run dev
 | `npm run admin:create -- --email … --password …` | root | Create or update an administrator (see *Adding administrators*) |
 | `npm run admin:reset` | root | Set the admin password to `ADMIN_PASSWORD` from `backend/.env` (use if you can't sign in) |
 | `npm test` | root | Run the backend test suite |
-| `npm run build` | root | Production build of the frontend (`public/`) |
-| `npm start` | root | Production API (also serves `public/` when present) |
+| `npm run build` | root | Production build of the frontend (`frontend/dist`) |
+| `npm start` | root | Production API (also serves `frontend/dist` when present) |
 
 ---
 
@@ -242,16 +242,21 @@ The first run downloads a MongoDB binary for `mongodb-memory-server` (~70 MB).
 
 ## Deploying to Vercel
 
-The repo is ready for Vercel (`vercel.json`, `api/index.js`): the frontend is served as static files and the API runs as one serverless function.
+The repo deploys as one Vercel project with two **services** (see `vercel.json`):
 
-1. Push the repo to GitHub and import it in Vercel. Leave the framework preset on **Other** and the root directory as the repo root; the build settings come from `vercel.json`.
-2. Add **two** environment variables:
-   * `MONGODB_URI`: your Atlas connection string (including the database name)
-   * `JWT_SECRET`: a long random string (48+ characters)
+| Service | Root | Framework | Public path |
+|---|---|---|---|
+| `backend` | `backend/` | Express, entry `src/vercel.js` | `/api/*` |
+| `frontend` | `frontend/` | Vite (static SPA) | everything else |
+
+The backend receives the full original path (`/api/...`), which is where all its routes live. The frontend calls the API on the same domain, so no service bindings or API URL are needed.
+
+1. Push to GitHub and import the repo in Vercel. Leave the root directory empty; the services are detected from `vercel.json`.
+2. Add **two** environment variables: `MONGODB_URI` (Atlas connection string including the database name) and `JWT_SECRET` (48+ random characters).
 3. In MongoDB Atlas → **Network Access**, allow `0.0.0.0/0`, because Vercel has no fixed IPs.
 4. Deploy. Students use `https://<your-app>.vercel.app/exam/<slug>`; admins use `/admin/login`.
 
-Everything else has a built-in default. Optional: `CRON_SECRET` protects the daily monitor cron.
+Everything else has a built-in default. Optional: `CRON_SECRET` protects the daily monitor cron. Run `vercel dev` to test both services together locally.
 
 On Vercel there is no always-on process, so the background monitor runs whenever an admin uses the panel and once a day via Vercel Cron. Students' timers and auto-submit are enforced on every request, so they don't depend on it.
 
@@ -264,7 +269,7 @@ On Vercel there is no always-on process, so the background monitor runs whenever
    npm run build                  # builds public
    NODE_ENV=production npm --prefix backend start
    ```
-   In production the API also serves `public/`, so students and admins use a single origin. Run it under a process manager (PM2 or systemd) or in a container.
+   In production the API also serves `frontend/dist`, so students and admins use a single origin. Run it under a process manager (PM2 or systemd) or in a container.
 3. **Reverse proxy:** put Nginx (or a cloud load balancer) in front for HTTPS, and set `TRUST_PROXY=1` and `CORS_ORIGINS=https://your-domain`.
 4. **Scaling:** the API is stateless (JWT + MongoDB), so you can run several instances behind the load balancer. The monitor runs in every instance safely because all state transitions are atomic.
 5. **Secrets:** use a long random `JWT_SECRET`, change the seeded admin password after first login, and never commit `.env`.

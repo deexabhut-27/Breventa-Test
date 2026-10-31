@@ -10,9 +10,6 @@ export default defineConfig({
     proxy: { '/api': { target: process.env.VITE_API_PROXY || 'http://localhost:5050', changeOrigin: true } },
   },
   build: {
-    // Build into <repo>/public: Vercel serves that folder by default.
-    outDir: '../public',
-    emptyOutDir: true,
     chunkSizeWarningLimit: 1200,
   },
 });
