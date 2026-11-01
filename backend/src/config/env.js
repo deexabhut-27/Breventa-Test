@@ -27,12 +27,21 @@ const schema = z.object({
   ADMIN_PASSWORD: z.string().optional(),
 });
 
-const parsed = schema.safeParse(process.env);
+let parsed = schema.safeParse(process.env);
+// Problems are listed by variable name only, never by value.
+export const configErrors = parsed.success ? [] : parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`);
 if (!parsed.success) {
-  const issues = parsed.error.issues.map((i) => `  - ${i.path.join('.')}: ${i.message}`).join('\n');
   // eslint-disable-next-line no-console
-  console.error(`Invalid environment configuration:\n${issues}`);
-  process.exit(1);
+  console.error(`Invalid environment configuration:\n${configErrors.map((e) => `  - ${e}`).join('\n')}`);
+  if (!isServerless) process.exit(1);
+  // On Vercel, exiting only produces an opaque FUNCTION_INVOCATION_FAILED. Start with safe
+  // placeholders instead; src/vercel.js answers every request with the list of problems.
+  const fallback = { ...process.env, MONGODB_URI: 'mongodb://invalid-config', JWT_SECRET: 'x'.repeat(48) };
+  parsed.error.issues.forEach((i) => {
+    const key = i.path[0];
+    if (key !== 'MONGODB_URI' && key !== 'JWT_SECRET') delete fallback[key];
+  });
+  parsed = schema.safeParse(fallback);
 }
 
 export const env = {

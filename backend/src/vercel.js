@@ -5,6 +5,7 @@
 import express from 'express';
 import { createApp } from './app.js';
 import { connectDB } from './config/db.js';
+import { configErrors } from './config/env.js';
 import { hashManuallyAddedAdmins } from './services/adminProvisioning.js';
 import { runDataMigrations } from './services/dataMigrations.js';
 import { logger } from './utils/logger.js';
@@ -27,6 +28,16 @@ function ensureDb() {
 const app = express();
 app.disable('x-powered-by');
 app.use(async (_req, res, next) => {
+  if (configErrors.length) {
+    return res.status(500).json({
+      success: false,
+      error: {
+        code: 'CONFIG_ERROR',
+        message: 'Server environment variables are missing or invalid. Fix them in Vercel → Settings → Environment Variables, then redeploy.',
+        problems: configErrors,
+      },
+    });
+  }
   try {
     await ensureDb();
     return next();
