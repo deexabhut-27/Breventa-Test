@@ -1,7 +1,7 @@
 import { ArrowDown, ArrowUp, BarChart3, FileDown, FileSpreadsheet, FileText, RotateCcw, Search, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Button, Card, ConfirmDialog, EmptyState, ErrorState, Field, Input, PageHeader, Pagination, ResultBadge, Select, Spinner, StatCard, StatusBadge, Table, Td, Th } from '../../components/ui.jsx';
+import { Button, Card, ConfirmDialog, DataCard, EmptyState, KV, ResponsiveList, ErrorState, Field, Input, PageHeader, Pagination, ResultBadge, Select, Spinner, StatCard, StatusBadge, Table, Td, Th } from '../../components/ui.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { adminApi, blobErrorMessage, downloadFile, errorMessage } from '../../lib/api.js';
 import { fmtDateTime, fmtDuration } from '../../lib/format.js';
@@ -192,6 +192,9 @@ export default function Results({ terminatedOnly = false }) {
           <EmptyState icon={BarChart3} title="No results match these filters" />
         ) : (
           <>
+            <ResponsiveList
+              breakpoint="xl"
+              table={
             <Table>
               <thead>
                 <tr>
@@ -263,6 +266,65 @@ export default function Results({ terminatedOnly = false }) {
                 ))}
               </tbody>
             </Table>
+              }
+              cards={
+              data.data.map((r) => (
+                <DataCard
+                  key={r._id}
+                  title={
+                    <Link to={`/admin/results/${r._id}`} className="hover:underline">
+                      {r.studentName}
+                    </Link>
+                  }
+                  subtitle={`${r.universityName}${r.enrollmentNumber ? ` · ${r.enrollmentNumber}` : ''}`}
+                  badge={<ResultBadge result={r} />}
+                  actions={
+                    <>
+                      <Link to={`/admin/results/${r._id}`}>
+                        <Button variant="ghost" size="sm">
+                          View
+                        </Button>
+                      </Link>
+                      <Button variant="ghost" size="sm" icon={Trash2} className="text-red-600" onClick={() => setDeleting(r)}>
+                        Delete
+                      </Button>
+                    </>
+                  }
+                >
+                  <KV label="Score">
+                    <b>
+                      {r.totalScore} / {r.maxScore}
+                    </b>{' '}
+                    ({r.percentage}%)
+                  </KV>
+                  <KV label="Status">
+                    <StatusBadge status={r.status} />
+                  </KV>
+                  <KV label="Correct / Wrong / Blank">
+                    {r.correct} / {r.incorrect} / {r.unanswered}
+                  </KV>
+                  <KV label="Time used">{fmtDuration(r.durationUsedSeconds)}</KV>
+                  <KV label="Easy / Med / Hard">
+                    {r.scores?.easy?.score ?? 0} / {r.scores?.medium?.score ?? 0} / {r.scores?.hard?.score ?? 0}
+                  </KV>
+                  <KV label="Aptitude / Reasoning">
+                    {r.scores?.aptitude?.score ?? 0} / {r.scores?.reasoning?.score ?? 0}
+                  </KV>
+                  <KV label="Contact" full>
+                    {r.email} · {r.phone}
+                  </KV>
+                  <KV label="Examination" full>
+                    {r.examTitle} · {fmtDateTime(r.startedAt)}
+                  </KV>
+                  {r.terminationReason && (
+                    <KV label="Termination reason" full>
+                      <span className="text-red-700">{r.terminationReason}</span>
+                    </KV>
+                  )}
+                </DataCard>
+              ))
+              }
+            />
             <Pagination meta={data.meta} onPage={(p) => update({ page: String(p) }, false)} />
           </>
         )}

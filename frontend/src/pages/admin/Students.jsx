@@ -1,10 +1,11 @@
-import { Pencil, Search, Trash2, Users } from 'lucide-react';
+import { MessageSquare, Pencil, Search, Trash2, Users } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Badge, Button, Card, ConfirmDialog, EmptyState, ErrorState, Field, Input, Modal, PageHeader, Pagination, ResultBadge, Select, Spinner, StatusBadge, Table, Td, Th } from '../../components/ui.jsx';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAdminAuth } from '../../context/AdminAuthContext.jsx';
+import { Badge, Button, Card, ConfirmDialog, DataCard, EmptyState, ErrorState, Field, Input, KV, Modal, PageHeader, Pagination, ResultBadge, Select, Spinner, StatusBadge } from '../../components/ui.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { adminApi, errorMessage } from '../../lib/api.js';
-import { fmtDateTime } from '../../lib/format.js';
+import { STAGE_COLORS, STAGE_LABELS, fmtDateTime } from '../../lib/format.js';
 
 function StudentModal({ id, onClose }) {
   const [data, setData] = useState(null);
@@ -142,6 +143,8 @@ function EditStudentModal({ student, onClose, onSaved }) {
 
 export default function Students() {
   const toast = useToast();
+  const navigate = useNavigate();
+  const { can } = useAdminAuth();
   const [exams, setExams] = useState([]);
   const [filters, setFilters] = useState({ search: '', exam: '', university: '' });
   const [page, setPage] = useState(1);
@@ -214,46 +217,58 @@ export default function Students() {
           <EmptyState icon={Users} title="No students found" description="Students appear here after registering through an examination link." />
         ) : (
           <>
-            <Table>
-              <thead>
-                <tr>
-                  <Th>Student</Th>
-                  <Th>University</Th>
-                  <Th>Contact</Th>
-                  <Th>Examination</Th>
-                  <Th>Status</Th>
-                  <Th className="text-right">Score</Th>
-                  <Th>Registered</Th>
-                  <Th />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {data.data.map((s) => (
-                  <tr key={s._id} className="hover:bg-slate-50">
-                    <Td>
-                      <button type="button" className="font-medium text-slate-900 hover:underline" onClick={() => setViewing(s._id)}>
-                        {s.fullName}
-                      </button>
-                      {s.enrollmentNumber && <p className="text-xs text-slate-500">{s.enrollmentNumber}</p>}
-                    </Td>
-                    <Td className="text-xs">{s.universityName}</Td>
-                    <Td className="text-xs">
-                      {s.email}
-                      <br />
-                      {s.phone}
-                    </Td>
-                    <Td className="text-xs">{s.exam?.title}</Td>
-                    <Td>{s.attempt ? <StatusBadge status={s.attempt.status} /> : <Badge>Registered</Badge>}</Td>
-                    <Td className="text-right tabular-nums">{s.result ? `${s.result.percentage}%` : '—'}</Td>
-                    <Td className="text-xs whitespace-nowrap">{fmtDateTime(s.createdAt)}</Td>
-                    <Td className="text-right whitespace-nowrap">
-                      <Button variant="ghost" size="sm" icon={Pencil} onClick={() => setEditing(s)} aria-label="Edit" title="Edit details" />
-                      <Button variant="ghost" size="sm" icon={Trash2} className="text-red-600" onClick={() => setDeleting(s)} aria-label="Delete" title="Delete" />
-                    </Td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
+            <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 xl:grid-cols-3">
+              {data.data.map((s) => (
+                <DataCard
+                  key={s._id}
+                  title={
+                    <button type="button" className="text-left hover:underline" onClick={() => setViewing(s._id)}>
+                      {s.fullName}
+                    </button>
+                  }
+                  subtitle={s.enrollmentNumber ? `Enrollment ${s.enrollmentNumber}` : 'No enrollment number'}
+                  badge={s.attempt ? <StatusBadge status={s.attempt.status} /> : <Badge>Registered</Badge>}
+                  actions={
+                    <>
+                      <Button variant="ghost" size="sm" onClick={() => setViewing(s._id)}>
+                        View
+                      </Button>
+                      {s.result && can('candidates') && (
+                        <Button variant="ghost" size="sm" icon={MessageSquare} onClick={() => navigate(`/admin/selection?exam=${s.examination}&stage=${s.stage && s.stage !== 'ONLINE_TEST' ? s.stage : ''}&candidate=${s._id}`)}>
+                          Notes
+                        </Button>
+                      )}
+                      <Button variant="ghost" size="sm" icon={Pencil} onClick={() => setEditing(s)}>
+                        Edit
+                      </Button>
+                      <Button variant="ghost" size="sm" icon={Trash2} className="text-red-600" onClick={() => setDeleting(s)}>
+                        Delete
+                      </Button>
+                    </>
+                  }
+                >
+                  <KV label="University" full>
+                    {s.universityName}
+                  </KV>
+                  <KV label="Email" full>
+                    {s.email}
+                  </KV>
+                  <KV label="Phone">{s.phone}</KV>
+                  <KV label="Score">{s.result ? `${s.result.percentage}%` : '—'}</KV>
+                  {s.result && (
+                    <KV label="Selection stage" full>
+                      <Badge color={STAGE_COLORS[s.stage || 'ONLINE_TEST']}>{STAGE_LABELS[s.stage || 'ONLINE_TEST']}</Badge>
+                    </KV>
+                  )}
+                  <KV label="Examination" full>
+                    {s.exam?.title || '—'}
+                  </KV>
+                  <KV label="Registered" full>
+                    {fmtDateTime(s.createdAt)}
+                  </KV>
+                </DataCard>
+              ))}
+            </div>
             <Pagination meta={data.meta} onPage={setPage} />
           </>
         )}

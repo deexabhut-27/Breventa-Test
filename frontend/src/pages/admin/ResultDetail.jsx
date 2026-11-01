@@ -1,7 +1,8 @@
-import { ArrowLeft, Check, FileText, RefreshCw, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Check, FileText, MessageSquare, RefreshCw, Trash2, X } from 'lucide-react';
+import { useAdminAuth } from '../../context/AdminAuthContext.jsx';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Badge, Button, Card, CardHeader, ConfirmDialog, ErrorState, PageHeader, ResultBadge, Select, Spinner, StatusBadge, Table, Td, Th } from '../../components/ui.jsx';
+import { Badge, Button, Card, CardHeader, ConfirmDialog, ErrorState, ResponsiveList, PageHeader, ResultBadge, Select, Spinner, StatusBadge, Table, Td, Th } from '../../components/ui.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { adminApi, blobErrorMessage, downloadFile, errorMessage } from '../../lib/api.js';
 import { DIFFICULTY_LABELS, fmtDateTime, fmtDuration, humanize } from '../../lib/format.js';
@@ -12,6 +13,7 @@ export default function ResultDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
+  const { can } = useAdminAuth();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [result, setResult] = useState(null);
   const [detail, setDetail] = useState(null);
@@ -56,6 +58,11 @@ export default function ResultDetail() {
         subtitle={`${result.universityName} · ${result.examTitle}`}
         actions={
           <>
+            {can('candidates') && (
+              <Button variant="secondary" icon={MessageSquare} onClick={() => navigate(`/admin/selection?exam=${result.examination}&candidate=${result.student}`)}>
+                Notes & rounds
+              </Button>
+            )}
             <Button variant="danger" icon={Trash2} onClick={() => setConfirmDelete(true)}>
               Delete
             </Button>
@@ -144,6 +151,9 @@ export default function ResultDetail() {
 
         <Card className="lg:col-span-2">
           <CardHeader title="Marks breakdown" />
+          <ResponsiveList
+            breakpoint="md"
+            table={
           <Table>
             <thead>
               <tr>
@@ -170,6 +180,23 @@ export default function ResultDetail() {
               ))}
             </tbody>
           </Table>
+            }
+            cards={
+            buckets.map(([label, b]) => (
+              <div key={label} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2.5 text-sm">
+                <div className="min-w-0">
+                  <p className="font-medium">{label}</p>
+                  <p className="text-xs text-slate-500">
+                    ✓ {b?.correct ?? 0} · ✗ {b?.incorrect ?? 0} · blank {b?.unanswered ?? 0} of {b?.total ?? 0}
+                  </p>
+                </div>
+                <span className="shrink-0 font-semibold tabular-nums">
+                  {b?.score ?? 0} / {b?.maxScore ?? 0}
+                </span>
+              </div>
+            ))
+            }
+          />
         </Card>
       </div>
 
@@ -179,7 +206,7 @@ export default function ResultDetail() {
           <ul className="divide-y divide-slate-100">
             {detail.attempt.violations.map((v, i) => (
               <li key={i} className="flex flex-wrap items-center gap-3 px-5 py-2.5 text-sm">
-                <span className="w-44 text-xs text-slate-500">{fmtDateTime(v.at)}</span>
+                <span className="w-full text-xs text-slate-500 sm:w-44">{fmtDateTime(v.at)}</span>
                 <Badge color={v.counted ? 'red' : 'gray'}>{humanize(v.type)}</Badge>
                 <span className="text-slate-600">{v.reason}</span>
                 <span className="ml-auto text-xs text-slate-400">{v.source}</span>

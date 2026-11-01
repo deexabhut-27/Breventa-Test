@@ -183,11 +183,11 @@ export default function ExamRoom() {
       submittingRef.current = true;
       setSubmitting(true);
       setSubmitError('');
-      const tries = auto ? 6 : 2;
+      const tries = auto ? 6 : 4; // retries ride out a burst (e.g. everyone submitting at the time limit)
       let message = '';
       for (let i = 0; i < tries; i += 1) {
         try {
-          await api.post('/student/attempt/submit', { pendingResponses: queueRef.current?.snapshot() || [] }, { timeout: 30000 });
+          await api.post('/student/attempt/submit', { pendingResponses: queueRef.current?.snapshot() || [] }, { timeout: 45000 });
           finish();
           return;
         } catch (err) {

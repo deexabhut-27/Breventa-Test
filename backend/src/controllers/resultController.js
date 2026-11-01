@@ -1,7 +1,7 @@
-import { Attempt, AuditLog, Examination, Result } from '../models/index.js';
-import { audit } from '../services/auditService.js';
+import { Attempt, Examination, Result } from '../models/index.js';
 import { deleteAttempts } from '../services/deletionService.js';
 import { evaluateAttempt } from '../services/evaluationService.js';
+import { refreshLatestResults } from '../services/latestResultService.js';
 import { buildResultsWorkbook, sendWorkbook } from '../services/excelService.js';
 import { writeResultsReport, writeStudentReport } from '../services/pdfService.js';
 import { buildResultFilter, buildSort, describeFilters, summarize } from '../services/resultQuery.js';
@@ -50,14 +50,7 @@ export async function deleteResult(req, res) {
   if (!result) throw AppError.notFound('Result not found');
   const removed = await deleteAttempts([result.attempt]);
   await Result.deleteOne({ _id: result._id });
-  await audit({
-    actorType: 'ADMIN',
-    actorId: req.admin._id,
-    action: 'RESULT_DELETED',
-    entityType: 'Result',
-    details: { studentName: result.studentName, examTitle: result.examTitle, totalScore: result.totalScore, ...removed },
-    ip: req.ip,
-  });
+  await refreshLatestResults({ studentIds: [result.student] });
   res.json({ success: true, data: { id: result._id, removed } });
 }
 
@@ -97,14 +90,4 @@ export async function exportExcel(req, res) {
 
 export async function resultSummary(req, res) {
   res.json({ success: true, data: summarize(await exportRows(req.valid.query)) });
-}
-
-export async function listAuditLogs(req, res) {
-  const q = req.valid.query;
-  const filter = q.action ? { action: q.action } : {};
-  const [items, total] = await Promise.all([
-    AuditLog.find(filter).sort({ createdAt: -1 }).skip((q.page - 1) * q.limit).limit(q.limit).lean(),
-    AuditLog.countDocuments(filter),
-  ]);
-  res.json({ success: true, data: items, meta: pageMeta(total, q.page, q.limit) });
 }

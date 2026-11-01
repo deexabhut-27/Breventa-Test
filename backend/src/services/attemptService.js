@@ -8,7 +8,7 @@ import { logger } from '../utils/logger.js';
 import { secureShuffle, securePick } from '../utils/random.js';
 import { assertExamOpen, DISTRIBUTION_KEYS, maxViolationsFor } from './examService.js';
 import { evaluateAttempt } from './evaluationService.js';
-import { audit } from './auditService.js';
+import { attemptQuestionsCache, questionPoolCache, questionTextCache } from './cache.js';
 
 const graceMs = () => env.SUBMISSION_GRACE_SECONDS * 1000;
 
@@ -37,9 +37,13 @@ export async function buildAttemptQuestions(exam) {
   for (const [key, difficulty] of DISTRIBUTION_KEYS) {
     const needed = exam.distribution?.[key] || 0;
     if (!needed) continue;
-    const pool = await Question.find({ isActive: true, difficulty, category: { $in: exam.categories } })
-      .select('_id difficulty category marks negativeMarks')
-      .lean();
+    const poolKey = `${difficulty}:${[...exam.categories].sort().join('|')}`;
+    // Concurrent starts share one in-flight read (the promise is cached, not just the result).
+    const pool = await questionPoolCache.getOrLoad(poolKey, () =>
+      Question.find({ isActive: true, difficulty, category: { $in: exam.categories } })
+        .select('_id difficulty category marks negativeMarks')
+        .lean(),
+    );
     if (pool.length < needed) {
       throw AppError.conflict(
         `This examination cannot start: it needs ${needed} ${difficulty.toLowerCase()} questions but only ${pool.length} are available. Please contact the examination administrator.`,
@@ -151,7 +155,7 @@ export async function startAttempt({ student, exam, ip, userAgent }) {
       ipAddress: ip,
       userAgent,
     });
-    await audit({ actorType: 'STUDENT', actorId: student._id, action: 'ATTEMPT_STARTED', entityType: 'Attempt', entityId: attempt._id, ip });
+    attempt.$locals.fresh = true;
     return { attempt, sessionId, resumed: false };
   } catch (err) {
     if (!isDuplicateKeyError(err)) throw err;
@@ -164,9 +168,11 @@ export async function startAttempt({ student, exam, ip, userAgent }) {
 
 /** Server-side status validation used by every examination API. */
 export async function loadActiveAttempt(student, sessionId) {
+  // The question list is the bulk of an attempt and never changes, so it is not loaded here;
+  // callers that need it use attemptQuestions().
   const attempt = await Attempt.findOne({ student: student._id, examination: student.examination })
     .sort({ attemptNumber: -1 })
-    .select('+sessionId');
+    .select('+sessionId -questions');
   if (!attempt) throw AppError.notFound('No examination attempt found. Please start the examination first.', 'NO_ATTEMPT');
   if (attempt.status !== ATTEMPT_STATUS.IN_PROGRESS) {
     const msg = attempt.status === ATTEMPT_STATUS.TERMINATED ? 'Your examination has been terminated' : 'Your examination has already been submitted';
@@ -182,12 +188,29 @@ export async function loadActiveAttempt(student, sessionId) {
   return attempt;
 }
 
+/** The attempt's (immutable) question list and option order, cached for the attempt's lifetime. */
+export async function attemptQuestions(attempt) {
+  if (attempt.questions?.length) return attempt.questions;
+  return attemptQuestionsCache.getOrLoad(attempt._id, async () => (await Attempt.findById(attempt._id).select('questions').lean())?.questions);
+}
+
 /** Student-safe attempt view: shuffled questions and options, saved responses, and server timer. Never includes answers. */
 export async function attemptPayload(attempt, { student, exam }) {
-  const ids = attempt.questions.map((q) => q.question);
-  const docs = await Question.find({ _id: { $in: ids } }).select('text options').lean();
-  const byId = new Map(docs.map((d) => [String(d._id), d]));
-  const responses = await StudentResponse.find({ attempt: attempt._id }).lean();
+  const questions = await attemptQuestions(attempt);
+  const ids = questions.map((q) => q.question);
+  // Question text rarely changes: serve it from cache, fetching only what is missing.
+  const byId = new Map();
+  const missing = [];
+  ids.forEach((qid) => {
+    const hit = questionTextCache.get(qid);
+    if (hit) byId.set(String(qid), hit);
+    else missing.push(qid);
+  });
+  if (missing.length) {
+    for (const d of await Question.find({ _id: { $in: missing } }).select('text options').lean()) byId.set(String(d._id), questionTextCache.set(d._id, d));
+  }
+  // A brand-new attempt has no saved answers yet: skip the lookup.
+  const responses = attempt.$locals?.fresh ? [] : await StudentResponse.find({ attempt: attempt._id }).lean();
   const respById = new Map(responses.map((r) => [String(r.question), r]));
   const now = Date.now();
 
@@ -209,7 +232,7 @@ export async function attemptPayload(attempt, { student, exam }) {
     },
     heartbeatIntervalSeconds: env.HEARTBEAT_INTERVAL_SECONDS,
     maxSeq: responses.reduce((m, r) => Math.max(m, r.seq || 0), 0),
-    questions: attempt.questions.map((aq, index) => {
+    questions: questions.map((aq, index) => {
       const q = byId.get(String(aq.question));
       return {
         index,
@@ -220,7 +243,7 @@ export async function attemptPayload(attempt, { student, exam }) {
         negativeMarks: aq.negativeMarks,
       };
     }),
-    responses: attempt.questions
+    responses: questions
       .map((aq, index) => {
         const r = respById.get(String(aq.question));
         if (!r) return null;
@@ -236,10 +259,11 @@ export async function attemptPayload(attempt, { student, exam }) {
 }
 
 export async function saveResponse(attempt, { index, selectedOption = null, markedForReview = false, seq }) {
-  if (!Number.isInteger(index) || index < 0 || index >= attempt.questions.length) {
+  const questions = await attemptQuestions(attempt);
+  if (!Number.isInteger(index) || index < 0 || index >= questions.length) {
     throw AppError.badRequest('This question is not part of your examination', 'INVALID_QUESTION');
   }
-  const aq = attempt.questions[index];
+  const aq = questions[index];
   const original = selectedOption === null || selectedOption === undefined ? null : aq.optionOrder[selectedOption];
   if (original === undefined) throw AppError.badRequest('Invalid option selected', 'INVALID_OPTION');
 
@@ -268,8 +292,9 @@ export async function saveResponse(attempt, { index, selectedOption = null, mark
 }
 
 export async function savePendingResponses(attempt, pending = []) {
+  if (!pending.length) return [];
   const results = [];
-  for (const p of pending.slice(0, attempt.questions.length)) {
+  for (const p of pending.slice(0, 1000)) {
     try {
       results.push(await saveResponse(attempt, p));
     } catch (err) {
@@ -340,29 +365,24 @@ export async function recordViolation(attemptId, { type, reason, eventId, client
  * Atomically moves an attempt out of IN_PROGRESS exactly once, then evaluates it.
  * Concurrent callers (manual submit, timer expiry, termination, monitor) cannot double-finalize.
  */
-export async function finalizeAttempt(attemptId, { status, submissionType, reason, actor }) {
+export async function finalizeAttempt(attemptId, { status, submissionType, reason }) {
   const now = new Date();
-  const current = await Attempt.findById(attemptId).select('status expiresAt terminationReason violationCount policy student');
-  if (!current) throw AppError.notFound('Attempt not found');
-  if (current.status !== ATTEMPT_STATUS.IN_PROGRESS) return { finalized: false, attempt: current };
-
-  const endedAt = submissionType === 'AUTO_TIMEOUT' || now > current.expiresAt ? current.expiresAt : now;
-  const set = { status, submissionType, endedAt };
-  if (status === ATTEMPT_STATUS.TERMINATED) set.terminationReason = reason || 'Terminated';
-
-  const updated = await Attempt.findOneAndUpdate({ _id: attemptId, status: ATTEMPT_STATUS.IN_PROGRESS }, { $set: set }, { new: true });
+  // $literal: these values are data, never field paths (a reason could start with "$").
+  const set = { status: { $literal: status }, submissionType: { $literal: submissionType } };
+  if (status === ATTEMPT_STATUS.TERMINATED) set.terminationReason = { $literal: reason || 'Terminated' };
+  // One conditional update does the state change; endedAt never goes past the deadline
+  // (auto-submits end exactly at expiresAt).
+  const updated = await Attempt.findOneAndUpdate(
+    { _id: attemptId, status: ATTEMPT_STATUS.IN_PROGRESS },
+    [{ $set: { ...set, endedAt: submissionType === 'AUTO_TIMEOUT' ? '$expiresAt' : { $min: [now, '$expiresAt'] } } }],
+    { new: true, projection: { questions: 0 } },
+  );
   if (!updated) {
-    return { finalized: false, attempt: await Attempt.findById(attemptId).select('status terminationReason violationCount policy') };
+    const current = await Attempt.findById(attemptId).select('status terminationReason violationCount policy');
+    if (!current) throw AppError.notFound('Attempt not found');
+    return { finalized: false, attempt: current };
   }
 
-  await audit({
-    actorType: actor?.type || 'SYSTEM',
-    actorId: actor?.id || updated.student,
-    action: status === ATTEMPT_STATUS.TERMINATED ? 'ATTEMPT_TERMINATED' : 'ATTEMPT_SUBMITTED',
-    entityType: 'Attempt',
-    entityId: updated._id,
-    details: { submissionType, reason },
-  });
 
   try {
     await evaluateAttempt(updated._id);

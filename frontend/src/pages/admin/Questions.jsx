@@ -5,6 +5,9 @@ import {
   Button,
   Card,
   ConfirmDialog,
+  DataCard,
+  KV,
+  ResponsiveList,
   EmptyState,
   ErrorState,
   Field,
@@ -330,6 +333,9 @@ export default function Questions() {
 
       {stats && (
         <Card className="mb-6 overflow-hidden">
+          <ResponsiveList
+            breakpoint="md"
+            table={
           <Table>
             <thead>
               <tr>
@@ -359,6 +365,23 @@ export default function Questions() {
               })}
             </tbody>
           </Table>
+            }
+            cards={
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {CATEGORIES.map((c) => {
+                const row = stats.matrix[c] || { EASY: 0, MEDIUM: 0, HARD: 0 };
+                return (
+                  <div key={c} className="rounded-lg border border-slate-200 px-3 py-2.5 text-sm">
+                    <p className="font-medium text-slate-800">{c}</p>
+                    <p className="mt-1 text-xs text-slate-600">
+                      Easy <b>{row.EASY}</b> · Medium <b>{row.MEDIUM}</b> · Hard <b>{row.HARD}</b> · Total <b>{row.EASY + row.MEDIUM + row.HARD}</b>
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+            }
+          />
         </Card>
       )}
 
@@ -397,6 +420,9 @@ export default function Questions() {
           <EmptyState icon={BookOpen} title="No questions found" description="Adjust the filters or add a new question." />
         ) : (
           <>
+            <ResponsiveList
+              breakpoint="lg"
+              table={
             <Table>
               <thead>
                 <tr>
@@ -439,6 +465,44 @@ export default function Questions() {
                 ))}
               </tbody>
             </Table>
+              }
+              cards={
+              data.data.map((q) => (
+                <DataCard
+                  key={q._id}
+                  title={<span className="font-medium">{q.text}</span>}
+                  badge={<Badge color={DIFF_COLOR[q.difficulty]}>{DIFFICULTY_LABELS[q.difficulty]}</Badge>}
+                  actions={
+                    <>
+                      <span className="mr-auto flex items-center gap-2 text-xs text-slate-500">
+                        <Toggle checked={q.isActive} onChange={() => toggleActive(q)} label="Active" /> {q.isActive ? 'Active' : 'Inactive'}
+                      </span>
+                      <Button variant="ghost" size="sm" icon={Pencil} onClick={() => setEditing(q)}>
+                        Edit
+                      </Button>
+                      <Button variant="ghost" size="sm" icon={Trash2} className="text-red-600" onClick={() => setDeleting(q)}>
+                        Delete
+                      </Button>
+                    </>
+                  }
+                >
+                  <KV label="Options" full>
+                    <ol className="space-y-0.5 text-sm">
+                      {q.options.map((o, i) => (
+                        <li key={i} className={i === q.correctOptionIndex ? 'font-semibold text-emerald-700' : 'text-slate-600'}>
+                          {'ABCD'[i]}. {o} {i === q.correctOptionIndex && '✓'}
+                        </li>
+                      ))}
+                    </ol>
+                  </KV>
+                  <KV label="Category">{q.category}</KV>
+                  <KV label="Marks">
+                    +{q.marks} / −{q.negativeMarks}
+                  </KV>
+                </DataCard>
+              ))
+              }
+            />
             <Pagination meta={data.meta} onPage={setPage} />
           </>
         )}

@@ -2,7 +2,7 @@ import { Readable } from 'node:stream';
 import ExcelJS from 'exceljs';
 import { Attempt, Question } from '../models/index.js';
 import { CATEGORIES, DIFFICULTIES } from '../config/constants.js';
-import { audit } from '../services/auditService.js';
+import { answerKeyCache, questionPoolCache, questionTextCache } from '../services/cache.js';
 import { buildQuestionsWorkbook, QUESTION_COLUMNS, sendWorkbook } from '../services/excelService.js';
 import { AppError } from '../utils/AppError.js';
 import { escapeRegex, pageMeta } from '../utils/helpers.js';
@@ -62,20 +62,23 @@ export async function getQuestion(req, res) {
 
 export async function createQuestion(req, res) {
   const question = await Question.create({ ...req.body, createdBy: req.admin._id });
-  await audit({ actorType: 'ADMIN', actorId: req.admin._id, action: 'QUESTION_CREATED', entityType: 'Question', entityId: question._id, ip: req.ip });
+  questionPoolCache.clear();
   res.status(201).json({ success: true, data: await Question.findById(question._id).select(ADMIN_FIELDS) });
 }
 
 export async function updateQuestion(req, res) {
   const question = await Question.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true }).select(ADMIN_FIELDS);
   if (!question) throw AppError.notFound('Question not found');
-  await audit({ actorType: 'ADMIN', actorId: req.admin._id, action: 'QUESTION_UPDATED', entityType: 'Question', entityId: question._id, ip: req.ip });
+  questionTextCache.delete(question._id);
+  answerKeyCache.delete(question._id);
+  questionPoolCache.clear();
   res.json({ success: true, data: question });
 }
 
 export async function setQuestionStatus(req, res) {
   const question = await Question.findByIdAndUpdate(req.params.id, { isActive: req.body.isActive }, { new: true }).select(ADMIN_FIELDS);
   if (!question) throw AppError.notFound('Question not found');
+  questionPoolCache.clear();
   res.json({ success: true, data: question });
 }
 
@@ -91,7 +94,9 @@ export async function deleteQuestion(req, res) {
     );
   }
   await question.deleteOne();
-  await audit({ actorType: 'ADMIN', actorId: req.admin._id, action: 'QUESTION_DELETED', entityType: 'Question', details: { text: question.text.slice(0, 120), usedIn }, ip: req.ip });
+  questionTextCache.delete(question._id);
+  answerKeyCache.delete(question._id);
+  questionPoolCache.clear();
   res.json({ success: true, data: { id: question._id } });
 }
 
@@ -214,7 +219,7 @@ export async function importQuestions(req, res) {
 
   let inserted = 0;
   if (valid.length) inserted = (await Question.insertMany(valid, { ordered: false })).length;
-  await audit({ actorType: 'ADMIN', actorId: req.admin._id, action: 'QUESTIONS_IMPORTED', details: { inserted, failed: errors.length, file: req.file.originalname }, ip: req.ip });
+  questionPoolCache.clear();
   res.status(inserted ? 201 : 400).json({
     success: inserted > 0,
     data: { inserted, failed: errors.length, errors: errors.slice(0, 200) },

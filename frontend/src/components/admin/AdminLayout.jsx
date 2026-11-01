@@ -4,12 +4,12 @@ import {
   BookOpen,
   ClipboardList,
   FileWarning,
-  GraduationCap,
   LayoutDashboard,
   LogOut,
   Menu,
   Settings,
   ShieldCheck,
+  Trophy,
   Users,
   X,
 } from 'lucide-react';
@@ -26,7 +26,8 @@ const NAV = [
   { to: '/admin/monitoring', label: 'Live Monitoring', icon: Activity, permission: 'monitoring' },
   { to: '/admin/results', label: 'Results', icon: BarChart3, permission: 'results' },
   { to: '/admin/terminated', label: 'Terminated', icon: FileWarning, permission: 'results' },
-  { to: '/admin/administrators', label: 'Administrators', icon: ShieldCheck, superAdmin: true },
+  { to: '/admin/selection', label: 'Selection rounds', icon: Trophy, permission: 'candidates' },
+  { to: '/admin/administrators', label: 'Administrators', icon: ShieldCheck, permission: 'admins' },
   { to: '/admin/settings', label: 'Settings', icon: Settings },
 ];
 
@@ -38,11 +39,11 @@ export default function AdminLayout() {
   const sidebar = (
     <div className="flex h-full flex-col bg-brand-900 text-slate-200">
       <div className="flex items-center gap-3 px-5 py-5">
-        <div className="rounded-lg bg-white/10 p-2">
-          <GraduationCap className="h-6 w-6 text-white" />
+        <div className="rounded-lg bg-white p-1.5">
+          <img src="/breventa-mark.png" alt="" className="h-7 w-7" />
         </div>
         <div>
-          <p className="text-sm font-semibold text-white">Placement Exam</p>
+          <p className="text-sm font-semibold text-white">Breventa Exams</p>
           <p className="text-xs text-slate-400">Administration</p>
         </div>
       </div>
@@ -64,7 +65,7 @@ export default function AdminLayout() {
       <div className="border-t border-white/10 p-4">
         <p className="truncate text-sm font-medium text-white">{admin?.name}</p>
         <p className="truncate text-xs text-slate-400">{admin?.email}</p>
-        <p className="mt-1 text-[11px] tracking-wide text-slate-400 uppercase">{admin?.role === 'SUPER_ADMIN' ? 'Super admin' : 'Admin'}</p>
+        <p className="mt-1 text-[11px] tracking-wide text-slate-400 uppercase">Administrator</p>
         <button
           type="button"
           onClick={() => {
@@ -96,7 +97,8 @@ export default function AdminLayout() {
           <button type="button" onClick={() => setOpen(true)} aria-label="Open menu">
             <Menu className="h-6 w-6" />
           </button>
-          <span className="ml-3 font-semibold">Placement Exam Admin</span>
+          <img src="/breventa-mark.png" alt="" className="ml-3 h-6 w-6" />
+          <span className="ml-2 font-semibold">Breventa Exams</span>
         </header>
         <main className="mx-auto max-w-[1400px] p-4 sm:p-6 lg:p-8">
           <Outlet />

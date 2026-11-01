@@ -1,4 +1,4 @@
-import { GraduationCap, Lock } from 'lucide-react';
+import { Lock } from 'lucide-react';
 import { useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Button, Field, Input } from '../../components/ui.jsx';
@@ -33,11 +33,9 @@ export default function Login() {
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-brand-900 to-brand-700 p-4">
       <div className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-2xl">
         <div className="mb-6 flex flex-col items-center text-center">
-          <div className="mb-3 rounded-xl bg-brand-50 p-3">
-            <GraduationCap className="h-8 w-8 text-brand-700" />
-          </div>
+          <img src="/breventa-logo.png" alt="Breventa Technologies Pvt. Ltd." className="mb-5 h-10 w-auto" />
           <h1 className="text-xl font-semibold">Administrator Sign In</h1>
-          <p className="mt-1 text-sm text-slate-500">University Placement Examination System</p>
+          <p className="mt-1 text-sm text-slate-500">Online Examination System</p>
         </div>
         <form onSubmit={submit} className="space-y-4" noValidate>
           <Field label="Email">

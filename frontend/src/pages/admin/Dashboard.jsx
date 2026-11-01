@@ -2,9 +2,11 @@ import { Activity, Award, CheckCircle2, FileWarning, Percent, TrendingUp, Users 
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { Card, CardHeader, ErrorState, PageHeader, ResultBadge, Select, Spinner, StatCard, Table, Td, Th } from '../../components/ui.jsx';
+import { Card, CardHeader, DataCard, ErrorState, KV, PageHeader, ResponsiveList, ResultBadge, Select, Spinner, StatCard, Table, Td, Th } from '../../components/ui.jsx';
 import { adminApi, errorMessage } from '../../lib/api.js';
-import { DIFFICULTY_LABELS, fmtDateTime } from '../../lib/format.js';
+import { useLivePoll } from '../../lib/useLivePoll.js';
+import { useAdminAuth } from '../../context/AdminAuthContext.jsx';
+import { DIFFICULTY_LABELS, STAGE_LABELS, STAGES, fmtDateTime } from '../../lib/format.js';
 
 // Single-series charts: one hue, muted grid/axes, tooltip on hover (no legend needed).
 const SERIES = '#2a78d6';
@@ -36,9 +38,9 @@ export default function Dashboard() {
       .catch((err) => setError(errorMessage(err)));
   }, [exam]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // Keep the dashboard current while it is open (pipeline moves, new results, live tests).
+  useLivePoll(load, 15000, [load]);
+  const { can } = useAdminAuth();
   useEffect(() => {
     adminApi.get('/admin/exams', { params: { limit: 100 } }).then((res) => setExams(res.data.data)).catch(() => {});
   }, []);
@@ -53,7 +55,7 @@ export default function Dashboard() {
         title="Dashboard"
         subtitle="Overview of registrations, examinations and performance"
         actions={
-          <Select value={exam} onChange={(e) => setExam(e.target.value)} className="w-64" aria-label="Filter by examination">
+          <Select value={exam} onChange={(e) => setExam(e.target.value)} className="w-full sm:w-64" aria-label="Filter by examination">
             <option value="">All examinations</option>
             {exams.map((e) => (
               <option key={e._id} value={e._id}>
@@ -64,7 +66,7 @@ export default function Dashboard() {
         }
       />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <StatCard label="Registered students" value={s.totalStudents} icon={Users} />
         <StatCard label="Completed tests" value={s.completed} icon={CheckCircle2} tone="green" />
         <StatCard label="Ongoing tests" value={s.ongoing} icon={Activity} tone="blue" hint={s.ongoing ? <Link className="underline" to="/admin/monitoring">Open live monitor</Link> : null} />
@@ -80,10 +82,28 @@ export default function Dashboard() {
         />
       </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-2">
+      {data.pipeline && (
+        <Card className="mt-4 sm:mt-6">
+          <CardHeader
+            title="Selection pipeline"
+            subtitle="Candidates who finished the online test, by round"
+            actions={can('candidates') ? <Link to={`/admin/selection${exam ? `?exam=${exam}` : ''}`} className="text-sm font-medium text-brand-700">Manage rounds</Link> : null}
+          />
+          <div className="grid grid-cols-3 gap-2 p-3 sm:grid-cols-5 sm:p-4">
+            {STAGES.map((st) => (
+              <div key={st} className="rounded-lg bg-slate-50 px-3 py-2.5">
+                <p className="truncate text-xs text-slate-500">{STAGE_LABELS[st]}</p>
+                <p className="text-xl font-semibold tabular-nums">{data.pipeline[st]}</p>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:mt-6 sm:gap-6 xl:grid-cols-2">
         <Card>
           <CardHeader title="Score distribution" subtitle="Number of students by percentage band" />
-          <div className="h-72 p-4">
+          <div className="h-52 p-3 sm:h-72 sm:p-4">
             <ResponsiveContainer>
               <BarChart data={data.scoreDistribution} barCategoryGap={2}>
                 <CartesianGrid vertical={false} stroke="#eef2f7" />
@@ -97,7 +117,7 @@ export default function Dashboard() {
         </Card>
         <Card>
           <CardHeader title="Attempts started" subtitle="Last 14 days" />
-          <div className="h-72 p-4">
+          <div className="h-52 p-3 sm:h-72 sm:p-4">
             {data.dailyAttempts.length ? (
               <ResponsiveContainer>
                 <BarChart data={data.dailyAttempts} barCategoryGap={2}>
@@ -115,11 +135,14 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3">
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:mt-6 sm:gap-6 xl:grid-cols-3">
         <Card className="xl:col-span-2">
           <CardHeader title="Recent results" actions={<Link to="/admin/results" className="text-sm font-medium text-brand-700">View all</Link>} />
           {data.recentResults.length ? (
-            <Table>
+            <ResponsiveList
+              breakpoint="md"
+              table={
+          <Table>
               <thead>
                 <tr>
                   <Th>Student</Th>
@@ -148,6 +171,28 @@ export default function Dashboard() {
                 ))}
               </tbody>
             </Table>
+              }
+              cards={
+              data.recentResults.map((r) => (
+                <DataCard
+                  key={r._id}
+                  title={
+                    <Link to={`/admin/results/${r._id}`} className="hover:underline">
+                      {r.studentName}
+                    </Link>
+                  }
+                  subtitle={r.universityName}
+                  badge={<ResultBadge result={r} />}
+                >
+                  <KV label="Percentage">{r.percentage}%</KV>
+                  <KV label="Finished">{fmtDateTime(r.endedAt)}</KV>
+                  <KV label="Examination" full>
+                    {r.examTitle}
+                  </KV>
+                </DataCard>
+              ))
+              }
+            />
           ) : (
             <p className="p-6 text-sm text-slate-500">No results yet.</p>
           )}
@@ -173,8 +218,11 @@ export default function Dashboard() {
       </div>
 
       {data.examPerformance.length > 0 && (
-        <Card className="mt-6">
+        <Card className="mt-4 sm:mt-6">
           <CardHeader title="Examination performance" />
+          <ResponsiveList
+            breakpoint="md"
+            table={
           <Table>
             <thead>
               <tr>
@@ -195,6 +243,15 @@ export default function Dashboard() {
               ))}
             </tbody>
           </Table>
+            }
+            cards={data.examPerformance.map((e) => (
+              <DataCard key={e.id} title={e.title}>
+                <KV label="Evaluated">{e.count}</KV>
+                <KV label="Average">{e.avgPercentage}%</KV>
+                <KV label="Pass rate">{e.passRate}%</KV>
+              </DataCard>
+            ))}
+          />
         </Card>
       )}
     </div>

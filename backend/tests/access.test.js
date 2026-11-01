@@ -1,81 +1,59 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { Admin, Examination, Result, Student } from '../src/models/index.js';
+import { PERMISSIONS } from '../src/config/constants.js';
 import { api, clearDb, createAdmin, createExam, registerStudent, seedQuestions, setupDb, startExam, studentData, teardownDb } from './helpers.js';
 
 beforeAll(setupDb);
 afterAll(teardownDb);
 beforeEach(clearDb);
 
-describe('role and access management', () => {
-  it('lets a super admin create an admin with limited module access, which is enforced', async () => {
+describe('administrators (one role, full access)', () => {
+  it('creates every administrator with full access, whatever role or sections are sent', async () => {
     const sa = await createAdmin();
     const created = await api()
       .post('/api/admin/admins')
       .set(sa.auth)
-      .send({ name: 'Results Officer', email: 'results@test.edu', password: 'Results123', role: 'ADMIN', permissions: ['results'] });
+      .send({ name: 'New Person', email: 'new@test.edu', password: 'NewPerson123', role: 'ADMIN', permissions: ['results'] });
     expect(created.status).toBe(201);
-    expect(created.body.data.permissions).toEqual(['results']);
+    expect(created.body.data.role).toBe('SUPER_ADMIN');
+    expect(created.body.data.permissions).toHaveLength(PERMISSIONS.length);
 
-    const login = await api().post('/api/admin/auth/login').send({ email: 'results@test.edu', password: 'Results123' });
+    const login = await api().post('/api/admin/auth/login').send({ email: 'new@test.edu', password: 'NewPerson123' });
     const auth = { Authorization: `Bearer ${login.body.data.token}` };
-    expect((await api().get('/api/admin/results').set(auth)).status).toBe(200);
-    expect((await api().get('/api/admin/dashboard').set(auth)).status).toBe(200);
-    expect((await api().get('/api/admin/exams').set(auth)).status).toBe(200); // read-only list for filters
-    const denied = await api().get('/api/admin/questions').set(auth);
-    expect(denied.status).toBe(403);
-    expect(denied.body.error.code).toBe('NO_PERMISSION');
-    expect((await api().post('/api/admin/exams').set(auth).send({})).status).toBe(403);
-    expect((await api().get('/api/admin/students').set(auth)).status).toBe(403);
-    expect((await api().get('/api/admin/monitoring').set(auth)).status).toBe(403);
-    expect((await api().get('/api/admin/admins').set(auth)).status).toBe(403);
-    expect((await api().get('/api/admin/audit-logs').set(auth)).status).toBe(403);
+    for (const path of ['questions', 'students', 'monitoring', 'results', 'candidates', 'admins']) {
+      expect((await api().get(`/api/admin/${path}`).set(auth)).status).toBe(200);
+    }
   });
 
-  it('updates role and permissions, and the change applies immediately', async () => {
-    const sa = await createAdmin();
-    const other = await createAdmin({ email: 'b@test.edu', role: 'ADMIN' });
-    const res = await api()
-      .put(`/api/admin/admins/${other.admin._id}`)
-      .set(sa.auth)
-      .send({ name: 'Admin B', email: 'b@test.edu', role: 'ADMIN', permissions: ['students'], isActive: true });
-    expect(res.status).toBe(200);
-    expect((await api().get('/api/admin/questions').set(other.auth)).status).toBe(403);
-    expect((await api().get('/api/admin/students').set(other.auth)).status).toBe(200);
-
-    const promoted = await api()
-      .put(`/api/admin/admins/${other.admin._id}`)
-      .set(sa.auth)
-      .send({ name: 'Admin B', email: 'b@test.edu', role: 'SUPER_ADMIN', permissions: [], isActive: true });
-    expect(promoted.body.data.permissions).toHaveLength(5); // super admin always has everything
-    expect((await api().get('/api/admin/questions').set(other.auth)).status).toBe(200);
+  it('lets any administrator manage any other, including the one who created them', async () => {
+    const first = await createAdmin();
+    await api().post('/api/admin/admins').set(first.auth).send({ name: 'Second Admin', email: 'second@test.edu', password: 'Second1234' });
+    const login = await api().post('/api/admin/auth/login').send({ email: 'second@test.edu', password: 'Second1234' });
+    const second = { Authorization: `Bearer ${login.body.data.token}` };
+    const edit = await api().put(`/api/admin/admins/${first.admin._id}`).set(second).send({ name: 'First Renamed', email: 'admin@test.edu', isActive: true });
+    expect(edit.status).toBe(200);
+    expect(edit.body.data).toMatchObject({ name: 'First Renamed', role: 'SUPER_ADMIN' });
+    expect((await api().post(`/api/admin/admins/${first.admin._id}/reset-password`).set(second).send({ password: 'Changed1234' })).status).toBe(200);
   });
 
-  it('never leaves the system without an active super admin and blocks self-changes', async () => {
+  it('never lets an administrator lock themselves or everyone out', async () => {
     const sa = await createAdmin();
-    const self = await api()
-      .put(`/api/admin/admins/${sa.admin._id}`)
-      .set(sa.auth)
-      .send({ name: 'x', email: 'admin@test.edu', role: 'ADMIN', permissions: [], isActive: true });
-    expect(self.status).toBe(400);
+    expect((await api().put(`/api/admin/admins/${sa.admin._id}`).set(sa.auth).send({ name: 'x x', email: 'admin@test.edu', isActive: false })).status).toBe(400);
     expect((await api().delete(`/api/admin/admins/${sa.admin._id}`).set(sa.auth)).status).toBe(400);
-
-    const sa2 = await createAdmin({ email: 'sa2@test.edu' });
-    // sa2 can demote sa because sa2 remains an active super admin
-    const demote = await api()
-      .put(`/api/admin/admins/${sa.admin._id}`)
-      .set(sa2.auth)
-      .send({ name: 'Admin A', email: 'admin@test.edu', role: 'ADMIN', permissions: ['results'], isActive: true });
-    expect(demote.status).toBe(200);
-    expect(await Admin.countDocuments({ role: 'SUPER_ADMIN' })).toBe(1);
+    const other = await createAdmin({ email: 'o@test.edu' });
+    expect((await api().put(`/api/admin/admins/${other.admin._id}`).set(sa.auth).send({ name: 'Other One', email: 'o@test.edu', isActive: false })).status).toBe(200);
+    // `other` is now disabled and `sa` is the only active admin: `other` cannot remove `sa`, and sa cannot remove itself.
+    const res = await api().delete(`/api/admin/admins/${other.admin._id}`).set(sa.auth); // removing a disabled admin is fine
+    expect(res.status).toBe(200);
+    expect(await Admin.countDocuments({ isActive: true })).toBe(1);
   });
 
   it('resets another admin password and removes admins', async () => {
     const sa = await createAdmin();
-    const other = await createAdmin({ email: 'c@test.edu', role: 'ADMIN' });
+    const other = await createAdmin({ email: 'c@test.edu' });
     expect((await api().post(`/api/admin/admins/${other.admin._id}/reset-password`).set(sa.auth).send({ password: 'short' })).status).toBe(400);
     expect((await api().post(`/api/admin/admins/${other.admin._id}/reset-password`).set(sa.auth).send({ password: 'BrandNew123' })).status).toBe(200);
-    const login = await api().post('/api/admin/auth/login').send({ email: 'c@test.edu', password: 'BrandNew123' });
-    expect(login.status).toBe(200);
+    expect((await api().post('/api/admin/auth/login').send({ email: 'c@test.edu', password: 'BrandNew123' })).status).toBe(200);
     expect((await api().delete(`/api/admin/admins/${other.admin._id}`).set(sa.auth)).status).toBe(200);
     expect(await Admin.countDocuments()).toBe(1);
   });
@@ -158,8 +136,8 @@ describe('admins added manually in the database', () => {
     await Admin.collection.insertOne({ name: 'Manual Admin', email: 'Manual@Test.edu', password: 'Manual123' });
     const login = await api().post('/api/admin/auth/login').send({ email: 'manual@test.edu', password: 'Manual123' });
     expect(login.status).toBe(200);
-    expect(login.body.data.admin).toMatchObject({ email: 'manual@test.edu', role: 'ADMIN', isActive: true });
-    expect(login.body.data.admin.permissions).toHaveLength(5);
+    expect(login.body.data.admin).toMatchObject({ email: 'manual@test.edu', role: 'SUPER_ADMIN', isActive: true });
+    expect(login.body.data.admin.permissions).toHaveLength(PERMISSIONS.length);
     const raw = await Admin.collection.findOne({ email: 'manual@test.edu' });
     expect(raw.password).toBeUndefined();
     expect(raw.passwordHash).toMatch(/^\$2/);
@@ -175,5 +153,12 @@ describe('admins added manually in the database', () => {
     const login = await api().post('/api/admin/auth/login').send({ email: 'boss@test.edu', password: 'BossPass99' });
     expect(login.body.data.admin.role).toBe('SUPER_ADMIN');
     expect((await api().post('/api/admin/auth/login').send({ email: 'weak@test.edu', password: 'short' })).status).toBe(401);
+  });
+});
+
+describe('audit log removed', () => {
+  it('no longer exposes an audit-log API', async () => {
+    const sa = await createAdmin();
+    expect((await api().get('/api/admin/audit-logs').set(sa.auth)).status).toBe(404);
   });
 });

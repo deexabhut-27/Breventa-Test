@@ -13,6 +13,7 @@ import {
   startAttempt,
 } from '../services/attemptService.js';
 import { publicExamView } from '../services/examService.js';
+import { examCache } from '../services/cache.js';
 import { AppError } from '../utils/AppError.js';
 import { logger } from '../utils/logger.js';
 import { beaconSchema } from '../validators/index.js';
@@ -21,9 +22,9 @@ import { studentView } from './publicController.js';
 export const SESSION_HEADER = 'x-exam-session';
 
 async function loadExam(student) {
-  const exam = await Examination.findById(student.examination);
-  if (!exam) throw AppError.notFound('Examination not found');
-  return exam;
+  const raw = await examCache.getOrLoad(student.examination, () => Examination.findById(student.examination).lean());
+  if (!raw) throw AppError.notFound('Examination not found');
+  return Examination.hydrate(raw);
 }
 
 const active = (req) => loadActiveAttempt(req.student, req.get(SESSION_HEADER));
@@ -86,7 +87,6 @@ export async function submit(req, res) {
   const { finalized } = await finalizeAttempt(attempt._id, {
     status: ATTEMPT_STATUS.COMPLETED,
     submissionType: 'MANUAL',
-    actor: { type: 'STUDENT', id: req.student._id },
   });
   if (!finalized) throw AppError.conflict('Your examination has already been submitted', 'ALREADY_SUBMITTED');
   res.json({ success: true, data: { status: ATTEMPT_STATUS.COMPLETED, submittedAt: new Date().toISOString() } });

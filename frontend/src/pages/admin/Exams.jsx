@@ -2,7 +2,7 @@ import { ClipboardList, Copy, Pencil, Plus, Trash2 } from 'lucide-react';
 import DeleteExamDialog from '../../components/admin/DeleteExamDialog.jsx';
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Button, Card, EmptyState, ErrorState, PageHeader, Select, Spinner, StatusBadge, Table, Td, Th } from '../../components/ui.jsx';
+import { Button, Card, DataCard, EmptyState, ErrorState, KV, PageHeader, ResponsiveList, Select, Spinner, StatusBadge, Table, Td, Th } from '../../components/ui.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { adminApi, errorMessage } from '../../lib/api.js';
 import { examLink, fmtDateTime } from '../../lib/format.js';
@@ -59,6 +59,9 @@ export default function Exams() {
         ) : !exams.length ? (
           <EmptyState icon={ClipboardList} title="No examinations yet" action={<Link to="/admin/exams/new"><Button icon={Plus}>Create examination</Button></Link>} />
         ) : (
+          <ResponsiveList
+            breakpoint="lg"
+            table={
           <Table>
             <thead>
               <tr>
@@ -119,6 +122,49 @@ export default function Exams() {
               ))}
             </tbody>
           </Table>
+            }
+            cards={
+            exams.map((e) => (
+              <DataCard
+                key={e._id}
+                title={
+                  <Link to={`/admin/exams/${e._id}`} className="hover:underline">
+                    {e.title}
+                  </Link>
+                }
+                subtitle={`Easy ${e.distribution.easy} · Medium ${e.distribution.medium} · Hard ${e.distribution.hard}`}
+                badge={<StatusBadge status={e.status} />}
+                actions={
+                  <>
+                    <Link to={`/admin/exams/${e._id}/edit`}>
+                      <Button variant="ghost" size="sm" icon={Pencil}>
+                        Edit
+                      </Button>
+                    </Link>
+                    {e.status === 'PUBLISHED' && (
+                      <Button variant="ghost" size="sm" icon={Copy} onClick={() => copy(e.slug)}>
+                        Link
+                      </Button>
+                    )}
+                    <Button variant="ghost" size="sm" icon={Trash2} className="text-red-600" onClick={() => setDeleting(e)}>
+                      Delete
+                    </Button>
+                  </>
+                }
+              >
+                <KV label="Questions">{e.totalQuestions}</KV>
+                <KV label="Duration">{e.durationMinutes} min</KV>
+                <KV label="Registered">{e.registrations}</KV>
+                <KV label="Done / Live / Term.">
+                  {e.attemptCounts.COMPLETED || 0} / {e.attemptCounts.IN_PROGRESS || 0} / {e.attemptCounts.TERMINATED || 0}
+                </KV>
+                <KV label="Window" full>
+                  {e.startAt || e.endAt ? `${fmtDateTime(e.startAt)} → ${fmtDateTime(e.endAt)}` : 'Always open'}
+                </KV>
+              </DataCard>
+            ))
+            }
+          />
         )}
       </Card>
       <DeleteExamDialog

@@ -6,6 +6,7 @@ import express from 'express';
 import { createApp } from './app.js';
 import { connectDB } from './config/db.js';
 import { hashManuallyAddedAdmins } from './services/adminProvisioning.js';
+import { runDataMigrations } from './services/dataMigrations.js';
 import { logger } from './utils/logger.js';
 
 let ready = null;
@@ -14,6 +15,7 @@ function ensureDb() {
   if (!ready) {
     ready = connectDB(undefined, { retries: 2 })
       .then(() => hashManuallyAddedAdmins().catch((err) => logger.error({ err }, 'Failed to activate manually added admins')))
+      .then(() => runDataMigrations().catch((err) => logger.error({ err }, 'Data migrations failed')))
       .catch((err) => {
         ready = null; // retry on the next request instead of caching the failure
         throw err;

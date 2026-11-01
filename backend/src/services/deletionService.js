@@ -1,4 +1,5 @@
-import { Attempt, AuditLog, Examination, Result, Student, StudentResponse } from '../models/index.js';
+import { Attempt, CandidateNote, Examination, Result, Student, StudentResponse } from '../models/index.js';
+import { examCache, studentCache } from './cache.js';
 
 /**
  * Permanent, cascading deletes. Children are removed before parents so an interrupted
@@ -10,7 +11,6 @@ export async function deleteAttempts(attemptIds) {
     StudentResponse.deleteMany({ attempt: { $in: attemptIds } }),
     Result.deleteMany({ attempt: { $in: attemptIds } }),
   ]);
-  await AuditLog.deleteMany({ entityId: { $in: attemptIds } });
   const attempts = await Attempt.deleteMany({ _id: { $in: attemptIds } });
   return { attempts: attempts.deletedCount, responses: responses.deletedCount, results: results.deletedCount };
 }
@@ -20,8 +20,9 @@ export async function deleteStudents(studentIds) {
   const attemptIds = (await Attempt.find({ student: { $in: studentIds } }).select('_id').lean()).map((a) => a._id);
   const removed = await deleteAttempts(attemptIds);
   await Result.deleteMany({ student: { $in: studentIds } });
-  await AuditLog.deleteMany({ $or: [{ actorId: { $in: studentIds } }, { entityId: { $in: studentIds } }] });
+  await CandidateNote.deleteMany({ student: { $in: studentIds } });
   const students = await Student.deleteMany({ _id: { $in: studentIds } });
+  studentIds.forEach((id) => studentCache.delete(id));
   return { students: students.deletedCount, ...removed };
 }
 
@@ -32,8 +33,9 @@ export async function deleteExamination(examId) {
   const strayAttempts = (await Attempt.find({ examination: examId }).select('_id').lean()).map((a) => a._id);
   const stray = await deleteAttempts(strayAttempts);
   await Result.deleteMany({ examination: examId });
-  await AuditLog.deleteMany({ entityId: examId });
+  await CandidateNote.deleteMany({ examination: examId });
   await Examination.deleteOne({ _id: examId });
+  examCache.delete(examId);
   return {
     students: removed.students,
     attempts: removed.attempts + stray.attempts,

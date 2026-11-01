@@ -6,6 +6,7 @@ import { CATEGORIES } from '../src/config/constants.js';
 import * as models from '../src/models/index.js';
 import { makeSlug } from '../src/services/examService.js';
 import { signAdminToken } from '../src/services/tokenService.js';
+import { clearAllCaches } from '../src/services/cache.js';
 
 let mongod;
 export const app = createApp();
@@ -24,6 +25,8 @@ export async function teardownDb() {
 
 export async function clearDb() {
   await Promise.all(Object.values(models).map((m) => m.deleteMany({})));
+  await mongoose.connection.db.collection('app_meta').deleteMany({});
+  clearAllCaches();
 }
 
 export async function createAdmin(overrides = {}) {

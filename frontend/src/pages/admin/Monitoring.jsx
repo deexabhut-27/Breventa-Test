@@ -1,7 +1,7 @@
 import { Activity, Ban, Send, Wifi, WifiOff } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Badge, Button, Card, CardHeader, ConfirmDialog, EmptyState, ErrorState, Field, Input, PageHeader, Select, Spinner, StatCard, Table, Td, Th } from '../../components/ui.jsx';
+import { Badge, Button, Card, CardHeader, ConfirmDialog, DataCard, EmptyState, ErrorState, Field, Input, KV, PageHeader, ResponsiveList, Select, Spinner, StatCard, Table, Td, Th } from '../../components/ui.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { adminApi, errorMessage } from '../../lib/api.js';
 import { fmtClock, fmtTime, humanize } from '../../lib/format.js';
@@ -83,7 +83,7 @@ export default function Monitoring() {
         title="Live Monitoring"
         subtitle={updatedAt ? `Auto-refreshes every ${REFRESH_MS / 1000}s · last update ${fmtTime(updatedAt)}` : 'Loading…'}
         actions={
-          <Select value={exam} onChange={(e) => setParams(e.target.value ? { exam: e.target.value } : {})} className="w-64" aria-label="Examination">
+          <Select value={exam} onChange={(e) => setParams(e.target.value ? { exam: e.target.value } : {})} className="w-full sm:w-64" aria-label="Examination">
             <option value="">All examinations</option>
             {exams.map((e) => (
               <option key={e._id} value={e._id}>
@@ -112,6 +112,9 @@ export default function Monitoring() {
               {!data.attempts.length ? (
                 <EmptyState icon={Activity} title="No examinations in progress" />
               ) : (
+                <ResponsiveList
+                  breakpoint="lg"
+                  table={
                 <Table>
                   <thead>
                     <tr>
@@ -172,6 +175,61 @@ export default function Monitoring() {
                     })}
                   </tbody>
                 </Table>
+                  }
+                  cards={
+                    data.attempts.map((a) => {
+                      const pct = Math.round((a.answered / a.questionCount) * 100);
+                      return (
+                        <DataCard
+                          key={a._id}
+                          className={a.connectionState === 'DISCONNECTED' ? 'border-amber-300 bg-amber-50/40' : ''}
+                          title={a.student?.fullName}
+                          subtitle={`${a.student?.universityName || ''}${!exam && a.examination?.title ? ` · ${a.examination.title}` : ''}`}
+                          badge={
+                            a.connectionState === 'ONLINE' ? (
+                              <Badge color="green">
+                                <Wifi className="h-3 w-3" /> Online
+                              </Badge>
+                            ) : (
+                              <Badge color="amber">
+                                <WifiOff className="h-3 w-3" /> Lost
+                              </Badge>
+                            )
+                          }
+                          actions={
+                            <>
+                              <Button variant="ghost" size="sm" icon={Send} onClick={() => setSubmitting(a)}>
+                                Submit
+                              </Button>
+                              <Button variant="ghost" size="sm" icon={Ban} className="text-red-600" onClick={() => setTerminating(a)}>
+                                Terminate
+                              </Button>
+                            </>
+                          }
+                        >
+                          <KV label="Progress" full>
+                            <div className="h-1.5 rounded-full bg-slate-100">
+                              <div className="h-1.5 rounded-full bg-brand-500" style={{ width: `${pct}%` }} />
+                            </div>
+                            <span className="text-xs text-slate-500">
+                              {a.answered} / {a.questionCount} answered
+                            </span>
+                          </KV>
+                          <KV label="Time left">
+                            <span className="font-mono">{fmtClock(a.remainingMs)}</span>
+                          </KV>
+                          <KV label="Violations">
+                            <span className={a.violationCount ? 'font-semibold text-red-600' : ''}>
+                              {a.violationCount}/{a.policy.maxViolations}
+                            </span>
+                          </KV>
+                          <KV label="Last heartbeat">{a.secondsSinceHeartbeat}s ago</KV>
+                          <KV label="Last event">{a.lastEvent ? `${humanize(a.lastEvent.type)} · ${fmtTime(a.lastEvent.at)}` : '—'}</KV>
+                        </DataCard>
+                      );
+                    })
+                  }
+                />
               )}
             </Card>
 

@@ -2,14 +2,17 @@ import { createApp } from './app.js';
 import { connectDB, disconnectDB } from './config/db.js';
 import { env } from './config/env.js';
 import { hashManuallyAddedAdmins } from './services/adminProvisioning.js';
+import { runDataMigrations } from './services/dataMigrations.js';
 import { startMonitor, stopMonitor } from './services/monitorService.js';
 import { logger } from './utils/logger.js';
 
 async function main() {
   await connectDB();
   await hashManuallyAddedAdmins().catch((err) => logger.error({ err }, 'Failed to activate manually added admins'));
+  await runDataMigrations().catch((err) => logger.error({ err }, 'Data migrations failed'));
   const app = createApp();
-  const server = app.listen(env.PORT, () => logger.info({ port: env.PORT, env: env.NODE_ENV }, 'API server listening'));
+  // A large accept backlog lets a burst of students connect at once (capped by the OS setting).
+  const server = app.listen({ port: env.PORT, backlog: 2048 }, () => logger.info({ port: env.PORT, env: env.NODE_ENV }, 'API server listening'));
   server.keepAliveTimeout = 65000;
   server.headersTimeout = 66000;
   startMonitor();

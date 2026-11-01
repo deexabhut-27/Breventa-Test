@@ -43,9 +43,11 @@ describe('admin authentication', () => {
     expect(fresh.status).toBe(200);
   });
 
-  it('restricts admin management to SUPER_ADMIN', async () => {
-    const { auth } = await createAdmin({ role: 'ADMIN' });
+  it('restricts admin management to admins with the Administrators section', async () => {
+    const { auth } = await createAdmin({ role: 'ADMIN', permissions: ['results'] });
     expect((await api().get('/api/admin/admins').set(auth)).status).toBe(403);
+    const withSection = await createAdmin({ email: 'm@test.edu', role: 'ADMIN', permissions: ['admins'] });
+    expect((await api().get('/api/admin/admins').set(withSection.auth)).status).toBe(200);
   });
 });
 

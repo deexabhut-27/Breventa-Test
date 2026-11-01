@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { z } from 'zod';
-import { CATEGORIES, DIFFICULTIES, PERMISSIONS, VIOLATION_TYPES } from '../config/constants.js';
+import { CATEGORIES, DIFFICULTIES, STAGES, VIOLATION_TYPES } from '../config/constants.js';
 
 const emptyToUndef = (schema) => z.preprocess((v) => (v === '' || v === null ? undefined : v), schema);
 
@@ -28,21 +28,9 @@ export const profileSchema = z.object({ name: z.string().trim().min(2).max(120),
 export const passwordChangeSchema = z
   .object({ currentPassword: z.string().min(1), newPassword: password })
   .refine((d) => d.currentPassword !== d.newPassword, { message: 'New password must differ from the current one', path: ['newPassword'] });
-const permissions = z.array(z.enum(PERMISSIONS)).max(PERMISSIONS.length).transform((p) => [...new Set(p)]);
-export const createAdminSchema = z.object({
-  name: z.string().trim().min(2).max(120),
-  email,
-  password,
-  role: z.enum(['ADMIN', 'SUPER_ADMIN']).default('ADMIN'),
-  permissions: permissions.default([...PERMISSIONS]),
-});
-export const updateAdminSchema = z.object({
-  name: z.string().trim().min(2).max(120),
-  email,
-  role: z.enum(['ADMIN', 'SUPER_ADMIN']),
-  permissions,
-  isActive: z.boolean(),
-});
+// Every administrator has full access, so only identity and status are editable.
+export const createAdminSchema = z.object({ name: z.string().trim().min(2).max(120), email, password });
+export const updateAdminSchema = z.object({ name: z.string().trim().min(2).max(120), email, isActive: z.boolean() });
 export const resetAdminPasswordSchema = z.object({ password });
 export const adminStatusSchema = z.object({ isActive: z.boolean() });
 
@@ -176,8 +164,37 @@ export const beaconSchema = z.object({
 });
 
 export const terminateSchema = z.object({ reason: z.string().trim().min(3).max(500) });
-export const auditListSchema = z.object({
-  action: emptyToUndef(z.string().trim().max(100).optional()),
+
+// ---------- Selection pipeline ----------
+export const candidateListSchema = z.object({
+  exam: emptyToUndef(objectId.optional()),
+  stage: emptyToUndef(z.enum(STAGES).optional()),
+  search: emptyToUndef(z.string().trim().max(200).optional()),
+  minPercentage: emptyToUndef(z.coerce.number().min(-1000).max(100).optional()),
+  sort: z.enum(['score', 'recent', 'name']).default('score'),
   page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(30),
+});
+export const liveSchema = candidateListSchema;
+export const shortlistSchema = z.object({
+  exam: objectId,
+  minPercentage: z.coerce.number().min(0, 'Cut-off cannot be negative').max(100),
+  topN: emptyToUndef(z.coerce.number().int().min(1).max(10000).optional()),
+  includeTerminated: z.boolean().default(false),
+  note: z.string().trim().max(1000).optional(),
+});
+export const notesUpdateSchema = z.object({
+  html: z.string().max(50000, 'Notes are too long'),
+  baseVersion: z.number().int().min(0),
+  force: z.boolean().default(false),
+});
+export const decisionSchema = z.object({
+  decision: z.enum(['ADVANCE', 'REJECT', 'REVERT']),
+  expectedStage: z.enum(STAGES),
+  note: z.string().trim().max(4000).optional(),
+});
+export const activitySchema = z.object({
+  exam: emptyToUndef(objectId.optional()),
+  since: emptyToUndef(z.coerce.date().optional()),
   limit: z.coerce.number().int().min(1).max(100).default(30),
 });

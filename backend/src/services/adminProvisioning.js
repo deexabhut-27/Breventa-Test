@@ -20,7 +20,7 @@ export async function hashManuallyAddedAdmins(email) {
       logger.warn({ email: doc.email }, 'Manually added admin skipped: needs an email and a password of at least 8 characters');
       continue;
     }
-    const role = doc.role === 'SUPER_ADMIN' ? 'SUPER_ADMIN' : 'ADMIN';
+    const role = 'SUPER_ADMIN'; // every administrator has full access
     const permissions = Array.isArray(doc.permissions) ? doc.permissions.filter((p) => PERMISSIONS.includes(p)) : [...PERMISSIONS];
     const now = new Date();
     await Admin.collection.updateOne(

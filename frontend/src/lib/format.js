@@ -35,3 +35,19 @@ export const toLocalInput = (d) => {
 export const humanize = (s) => String(s || '').replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
 
 export const examLink = (slug) => `${window.location.origin}/exam/${slug}`;
+
+// ---------- Selection pipeline ----------
+export const STAGES = ['ONLINE_TEST', 'ROUND_2', 'FINAL_ROUND', 'SELECTED', 'REJECTED'];
+export const STAGE_LABELS = { ONLINE_TEST: 'Online test', ROUND_2: 'Round 2', FINAL_ROUND: 'Final round', SELECTED: 'Selected', REJECTED: 'Rejected' };
+export const STAGE_COLORS = { ONLINE_TEST: 'gray', ROUND_2: 'blue', FINAL_ROUND: 'purple', SELECTED: 'green', REJECTED: 'red' };
+// Label of the "move forward" decision in each active stage.
+export const ADVANCE_LABELS = { ONLINE_TEST: 'Shortlist for Round 2', ROUND_2: 'Qualified for final round', FINAL_ROUND: 'Mark as selected' };
+
+export function fmtAgo(d) {
+  if (!d) return '—';
+  const s = Math.max(0, Math.round((Date.now() - new Date(d).getTime()) / 1000));
+  if (s < 45) return 'just now';
+  if (s < 3600) return `${Math.round(s / 60)} min ago`;
+  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+  return fmtDateTime(d);
+}

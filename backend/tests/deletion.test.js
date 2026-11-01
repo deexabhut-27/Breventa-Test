@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { Attempt, AuditLog, Examination, Question, Result, Student, StudentResponse } from '../src/models/index.js';
+import { Attempt, Examination, Question, Result, Student, StudentResponse } from '../src/models/index.js';
 import { api, clearDb, createAdmin, createExam, registerStudent, seedQuestions, setupDb, startExam, teardownDb } from './helpers.js';
 
 beforeAll(setupDb);
@@ -49,8 +49,6 @@ describe('deleting an examination', () => {
     expect(await Examination.exists({ _id: exam._id })).toBeNull();
     expect(await counts({ examination: exam._id })).toEqual({ students: 0, attempts: 0, results: 0 });
     expect(await StudentResponse.countDocuments({ attempt: { $in: attemptIds } })).toBe(0);
-    expect(await AuditLog.countDocuments({ $or: [{ entityId: { $in: [...attemptIds, ...studentIds, exam._id] } }, { actorId: { $in: studentIds } }] })).toBe(0);
-    expect(await AuditLog.countDocuments({ action: 'EXAM_DELETED' })).toBe(1); // the deletion itself is recorded
 
     expect(await counts({ examination: other._id })).toEqual(otherBefore);
     expect(await Question.countDocuments()).toBe(60); // the question bank is shared and kept
@@ -62,7 +60,7 @@ describe('deleting an examination', () => {
 });
 
 describe('deleting a student', () => {
-  it('removes the student, attempts, answers, results and logs, even mid-exam', async () => {
+  it('removes the student, attempts, answers and results, even mid-exam', async () => {
     const { live } = await populate();
     const attempt = await Attempt.findOne({ student: live.student.id });
     const res = await api().delete(`/api/admin/students/${live.student.id}`).set(sa.auth);
@@ -70,7 +68,6 @@ describe('deleting a student', () => {
     expect(await Student.exists({ _id: live.student.id })).toBeNull();
     expect(await Attempt.countDocuments({ student: live.student.id })).toBe(0);
     expect(await StudentResponse.countDocuments({ attempt: attempt._id })).toBe(0);
-    expect(await AuditLog.countDocuments({ $or: [{ actorId: attempt.student }, { entityId: attempt._id }] })).toBe(0);
   });
 });
 

@@ -1,7 +1,8 @@
 import { Attempt, Examination, Student } from '../models/index.js';
 import { EXAM_STATUS } from '../config/constants.js';
-import { audit } from '../services/auditService.js';
 import { deleteExamination } from '../services/deletionService.js';
+import { applyPassMark } from '../services/pipelineService.js';
+import { examCache } from '../services/cache.js';
 import { checkQuestionAvailability, makeSlug } from '../services/examService.js';
 import { AppError } from '../utils/AppError.js';
 import { escapeRegex, pageMeta } from '../utils/helpers.js';
@@ -47,20 +48,22 @@ export async function getExam(req, res) {
 
 export async function createExam(req, res) {
   const exam = await Examination.create({ ...req.body, slug: makeSlug(req.body.title), createdBy: req.admin._id, status: EXAM_STATUS.DRAFT });
-  await audit({ actorType: 'ADMIN', actorId: req.admin._id, action: 'EXAM_CREATED', entityType: 'Examination', entityId: exam._id, ip: req.ip });
   res.status(201).json({ success: true, data: { ...exam.toObject(), availability: await checkQuestionAvailability(exam) } });
 }
 
 export async function updateExam(req, res) {
   const exam = await findExam(req.params.id);
+  const passMarkChanged = req.body.passPercentage !== undefined && req.body.passPercentage !== exam.passPercentage;
   exam.set({ ...req.body, startAt: req.body.startAt ?? null, endAt: req.body.endAt ?? null });
   if (exam.status === EXAM_STATUS.PUBLISHED) {
     const availability = await checkQuestionAvailability(exam);
     if (!availability.ok) throw AppError.conflict(availability.message, 'INSUFFICIENT_QUESTIONS', availability.items);
   }
   await exam.save();
-  await audit({ actorType: 'ADMIN', actorId: req.admin._id, action: 'EXAM_UPDATED', entityType: 'Examination', entityId: exam._id, ip: req.ip });
-  res.json({ success: true, data: { ...exam.toObject(), availability: await checkQuestionAvailability(exam) } });
+  examCache.delete(exam._id);
+  // A new pass mark applies retroactively: results are re-marked and Round 2 re-synced.
+  const passMarkUpdate = passMarkChanged ? await applyPassMark(exam) : null;
+  res.json({ success: true, data: { ...exam.toObject(), availability: await checkQuestionAvailability(exam), passMarkUpdate } });
 }
 
 export async function availability(req, res) {
@@ -75,22 +78,22 @@ export async function publishExam(req, res) {
   exam.status = EXAM_STATUS.PUBLISHED;
   exam.publishedAt = new Date();
   await exam.save();
-  await audit({ actorType: 'ADMIN', actorId: req.admin._id, action: 'EXAM_PUBLISHED', entityType: 'Examination', entityId: exam._id, ip: req.ip });
+  examCache.delete(exam._id);
   res.json({ success: true, data: exam });
 }
 
-function setExamStatus(status, action) {
+function setExamStatus(status) {
   return async (req, res) => {
     const exam = await findExam(req.params.id);
     exam.status = status;
     await exam.save();
-    await audit({ actorType: 'ADMIN', actorId: req.admin._id, action, entityType: 'Examination', entityId: exam._id, ip: req.ip });
+    examCache.delete(exam._id);
     res.json({ success: true, data: exam });
   };
 }
 
-export const unpublishExam = setExamStatus(EXAM_STATUS.DRAFT, 'EXAM_UNPUBLISHED');
-export const closeExam = setExamStatus(EXAM_STATUS.CLOSED, 'EXAM_CLOSED');
+export const unpublishExam = setExamStatus(EXAM_STATUS.DRAFT);
+export const closeExam = setExamStatus(EXAM_STATUS.CLOSED);
 
 export async function duplicateExam(req, res) {
   const src = await findExam(req.params.id);
@@ -104,13 +107,5 @@ export async function duplicateExam(req, res) {
 export async function deleteExam(req, res) {
   const exam = await findExam(req.params.id);
   const removed = await deleteExamination(exam._id);
-  await audit({
-    actorType: 'ADMIN',
-    actorId: req.admin._id,
-    action: 'EXAM_DELETED',
-    entityType: 'Examination',
-    details: { title: exam.title, ...removed },
-    ip: req.ip,
-  });
   res.json({ success: true, data: { id: exam._id, removed } });
 }

@@ -110,7 +110,14 @@ export default function ExamEditor() {
     };
     try {
       const res = id ? await adminApi.put(`/admin/exams/${id}`, body) : await adminApi.post('/admin/exams', body);
-      toast.success(id ? 'Examination updated' : 'Examination created as draft');
+      const pm = res.data.data.passMarkUpdate;
+      toast.success(
+        pm
+          ? `Pass mark set to ${body.passPercentage}%: ${pm.resultsUpdated} result(s) re-marked, ${pm.qualified} moved to Round 2${pm.movedBack ? `, ${pm.movedBack} moved back to Online test` : ''}`
+          : id
+            ? 'Examination updated'
+            : 'Examination created as draft',
+      );
       navigate(`/admin/exams/${res.data.data._id}`);
     } catch (err) {
       toast.error(errorMessage(err));
@@ -245,7 +252,10 @@ export default function ExamEditor() {
               </Field>
             )}
             {form.negativeMarking.enabled && form.markingScheme === 'QUESTION' && <p className="self-end text-xs text-slate-500">Each question's own negative marks will be deducted.</p>}
-            <Field label="Pass percentage">
+            <Field
+              label="Pass percentage"
+              hint="Can be changed any time, even after the test: results are re-marked Pass/Fail and students who pass move to Round 2 automatically (auto-qualified students who no longer pass move back)."
+            >
               <Input type="number" min="0" max="100" value={form.passPercentage} onChange={(e) => set('passPercentage', e.target.value)} />
             </Field>
           </div>

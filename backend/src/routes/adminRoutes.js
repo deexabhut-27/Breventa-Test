@@ -1,13 +1,14 @@
 import { Router } from 'express';
 import multer from 'multer';
 import * as auth from '../controllers/adminAuthController.js';
+import * as candidates from '../controllers/candidateController.js';
 import { getDashboard } from '../controllers/dashboardController.js';
 import * as exams from '../controllers/examController.js';
 import * as monitoring from '../controllers/monitoringController.js';
 import * as questions from '../controllers/questionController.js';
 import * as results from '../controllers/resultController.js';
 import * as students from '../controllers/studentAdminController.js';
-import { requireAdmin, requirePermission as can, requireRole } from '../middleware/auth.js';
+import { requireAdmin, requirePermission as can } from '../middleware/auth.js';
 import { loginLimiter } from '../middleware/rateLimiters.js';
 import { validate } from '../middleware/validate.js';
 import { resultFilterSchema } from '../services/resultQuery.js';
@@ -17,7 +18,6 @@ import * as v from '../validators/index.js';
 // 4 MB: Vercel caps request bodies at 4.5 MB.
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 * 1024 * 1024, files: 1 } });
 const id = validate({ params: v.idParams });
-const superAdmin = requireRole('SUPER_ADMIN');
 const exportQuery = resultFilterSchema.extend({ limit: resultFilterSchema.shape.limit.optional() });
 
 const router = Router();
@@ -29,12 +29,12 @@ router.use(h(requireAdmin));
 router.get('/auth/me', h(auth.me));
 router.put('/auth/profile', validate({ body: v.profileSchema }), h(auth.updateProfile));
 router.put('/auth/password', validate({ body: v.passwordChangeSchema }), h(auth.changePassword));
-router.get('/admins', superAdmin, h(auth.listAdmins));
-router.post('/admins', superAdmin, validate({ body: v.createAdminSchema }), h(auth.createAdmin));
-router.put('/admins/:id', superAdmin, id, validate({ body: v.updateAdminSchema }), h(auth.updateAdmin));
-router.patch('/admins/:id/status', superAdmin, id, validate({ body: v.adminStatusSchema }), h(auth.setAdminStatus));
-router.post('/admins/:id/reset-password', superAdmin, id, validate({ body: v.resetAdminPasswordSchema }), h(auth.resetAdminPassword));
-router.delete('/admins/:id', superAdmin, id, h(auth.deleteAdmin));
+router.get('/admins', can('admins'), h(auth.listAdmins));
+router.post('/admins', can('admins'), validate({ body: v.createAdminSchema }), h(auth.createAdmin));
+router.put('/admins/:id', can('admins'), id, validate({ body: v.updateAdminSchema }), h(auth.updateAdmin));
+router.patch('/admins/:id/status', can('admins'), id, validate({ body: v.adminStatusSchema }), h(auth.setAdminStatus));
+router.post('/admins/:id/reset-password', can('admins'), id, validate({ body: v.resetAdminPasswordSchema }), h(auth.resetAdminPassword));
+router.delete('/admins/:id', can('admins'), id, h(auth.deleteAdmin));
 
 // Dashboard and the read-only exam list (used as a filter on many pages) are open to every admin.
 router.get('/dashboard', h(getDashboard));
@@ -80,6 +80,15 @@ router.get('/results/:id/pdf', can('results'), id, h(results.studentPdf));
 router.post('/results/:id/reevaluate', can('results'), id, h(results.reevaluate));
 router.delete('/results/:id', can('results'), id, h(results.deleteResult));
 
-router.get('/audit-logs', superAdmin, validate({ query: v.auditListSchema }), h(results.listAuditLogs));
+router.get('/candidates', can('candidates'), validate({ query: v.candidateListSchema }), h(candidates.listCandidates));
+router.get('/candidates/live', can('candidates'), validate({ query: v.liveSchema }), h(candidates.live));
+router.get('/candidates/summary', can('candidates'), h(candidates.candidateSummary));
+router.get('/candidates/activity', can('candidates'), validate({ query: v.activitySchema }), h(candidates.activity));
+router.post('/candidates/shortlist/preview', can('candidates'), validate({ body: v.shortlistSchema }), h(candidates.previewShortlist));
+router.post('/candidates/shortlist', can('candidates'), validate({ body: v.shortlistSchema }), h(candidates.applyShortlist));
+router.get('/candidates/:id', can('candidates'), id, h(candidates.getCandidate));
+router.put('/candidates/:id/notes', can('candidates'), id, validate({ body: v.notesUpdateSchema }), h(candidates.saveNotes));
+router.post('/candidates/:id/decision', can('candidates'), id, validate({ body: v.decisionSchema }), h(candidates.decide));
+
 
 export default router;

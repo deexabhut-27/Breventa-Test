@@ -1,54 +1,14 @@
 import { KeyRound, Pencil, Save, Trash2, UserPlus } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import { Badge, Button, Card, ConfirmDialog, Field, Input, Modal, PageHeader, Select, Spinner, Table, Td, Th, Toggle } from '../../components/ui.jsx';
+import { Badge, Button, Card, ConfirmDialog, DataCard, Field, Input, KV, Modal, PageHeader, Spinner, Toggle } from '../../components/ui.jsx';
 import { useAdminAuth } from '../../context/AdminAuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { adminApi, errorMessage } from '../../lib/api.js';
 import { fmtDateTime } from '../../lib/format.js';
 
-const MODULES = [
-  ['exams', 'Examinations', 'Create, edit, publish and close examinations'],
-  ['questions', 'Question bank', 'Add, edit, import and export questions'],
-  ['students', 'Students', 'View, edit and delete registrations'],
-  ['monitoring', 'Live monitoring', 'Watch running exams, terminate or force-submit'],
-  ['results', 'Results & reports', 'Results, terminated records, PDF / Excel exports'],
-];
-const ALL = MODULES.map(([k]) => k);
-const EMPTY_ADMIN = { name: '', email: '', password: '', role: 'ADMIN', permissions: ALL, isActive: true };
+const EMPTY = { name: '', email: '', password: '', isActive: true };
 
-function AccessEditor({ form, setForm }) {
-  const toggle = (k) => setForm({ ...form, permissions: form.permissions.includes(k) ? form.permissions.filter((p) => p !== k) : [...form.permissions, k] });
-  return (
-    <div className="space-y-3">
-      <Field label="Role">
-        <Select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-          <option value="ADMIN">Admin — only the sections selected below</option>
-          <option value="SUPER_ADMIN">Super admin — everything, including managing administrators</option>
-        </Select>
-      </Field>
-      {form.role === 'ADMIN' ? (
-        <div>
-          <p className="mb-2 text-sm font-medium text-slate-700">Access</p>
-          <div className="space-y-2">
-            {MODULES.map(([key, label, hint]) => (
-              <label key={key} className="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-200 p-3 hover:bg-slate-50">
-                <input type="checkbox" className="mt-0.5 h-4 w-4 accent-brand-700" checked={form.permissions.includes(key)} onChange={() => toggle(key)} />
-                <span>
-                  <span className="block text-sm font-medium text-slate-800">{label}</span>
-                  <span className="block text-xs text-slate-500">{hint}</span>
-                </span>
-              </label>
-            ))}
-          </div>
-          <p className="mt-2 text-xs text-slate-500">Every admin can see the dashboard and their own profile.</p>
-        </div>
-      ) : (
-        <p className="rounded-lg bg-violet-50 p-3 text-xs text-violet-800">Super admins have full access, including adding, editing and removing administrators.</p>
-      )}
-    </div>
-  );
-}
-
+/** Every administrator has full access, so accounts only have a name, email, password and status. */
 export default function Administrators() {
   const { admin } = useAdminAuth();
   const toast = useToast();
@@ -57,7 +17,7 @@ export default function Administrators() {
   const [editing, setEditing] = useState(null);
   const [resetting, setResetting] = useState(null);
   const [removing, setRemoving] = useState(null);
-  const [form, setForm] = useState(EMPTY_ADMIN);
+  const [form, setForm] = useState(EMPTY);
   const [newPassword, setNewPassword] = useState('');
   const [saving, setSaving] = useState(false);
   const load = useCallback(() => adminApi.get('/admin/admins').then((res) => setList(res.data.data)).catch(() => setList([])), []);
@@ -78,22 +38,17 @@ export default function Administrators() {
       setSaving(false);
     }
   };
-  const openEdit = (a) => {
-    setForm({ name: a.name, email: a.email, role: a.role, permissions: a.permissions || [], isActive: a.isActive });
-    setEditing(a);
-  };
-  const label = (k) => MODULES.find(([m]) => m === k)?.[1] || k;
 
   return (
     <div>
       <PageHeader
         title="Administrators"
-        subtitle="Create admin accounts and choose which sections each one can access. New admins can sign in immediately with the email and password you set."
+        subtitle="Every administrator has full access to the admin panel. New administrators can sign in immediately with the email and password you set."
         actions={
           <Button
             icon={UserPlus}
             onClick={() => {
-              setForm(EMPTY_ADMIN);
+              setForm(EMPTY);
               setCreating(true);
             }}
           >
@@ -102,69 +57,76 @@ export default function Administrators() {
         }
       />
       <Card>
-      {!list ? (
-        <Spinner />
-      ) : (
-        <Table>
-          <thead>
-            <tr>
-              <Th>Name</Th>
-              <Th>Role</Th>
-              <Th>Access</Th>
-              <Th>Last sign-in</Th>
-              <Th>Status</Th>
-              <Th />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
+        {!list ? (
+          <Spinner />
+        ) : (
+          <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 xl:grid-cols-3">
             {list.map((a) => {
               const self = a._id === admin._id;
               return (
-                <tr key={a._id}>
-                  <Td>
-                    <p className="font-medium">
-                      {a.name} {self && <span className="text-xs text-slate-400">(you)</span>}
-                    </p>
-                    <p className="text-xs text-slate-500">{a.email}</p>
-                  </Td>
-                  <Td>
-                    <Badge color={a.role === 'SUPER_ADMIN' ? 'purple' : 'blue'}>{a.role === 'SUPER_ADMIN' ? 'Super admin' : 'Admin'}</Badge>
-                  </Td>
-                  <Td className="max-w-xs text-xs">
-                    {a.role === 'SUPER_ADMIN' ? 'Everything' : a.permissions?.length ? a.permissions.map(label).join(', ') : <span className="text-red-600">No sections</span>}
-                  </Td>
-                  <Td className="text-xs">{fmtDateTime(a.lastLoginAt)}</Td>
-                  <Td>{a.isActive ? <Badge color="green">Active</Badge> : <Badge>Disabled</Badge>}</Td>
-                  <Td className="text-right whitespace-nowrap">
-                    {!self && (
+                <DataCard
+                  key={a._id}
+                  title={
+                    <>
+                      {a.name} {self && <span className="text-xs font-normal text-slate-400">(you)</span>}
+                    </>
+                  }
+                  subtitle={a.email}
+                  badge={a.isActive ? <Badge color="green">Active</Badge> : <Badge>Disabled</Badge>}
+                  actions={
+                    self ? (
+                      <span className="text-xs text-slate-400">Change your own details in Settings</span>
+                    ) : (
                       <>
-                        <Button variant="ghost" size="sm" icon={Pencil} onClick={() => openEdit(a)} aria-label="Edit access" title="Edit role & access" />
-                        <Button variant="ghost" size="sm" icon={KeyRound} onClick={() => { setNewPassword(''); setResetting(a); }} aria-label="Reset password" title="Reset password" />
-                        <Button variant="ghost" size="sm" icon={Trash2} className="text-red-600" onClick={() => setRemoving(a)} aria-label="Remove" title="Remove" />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          icon={Pencil}
+                          onClick={() => {
+                            setForm({ name: a.name, email: a.email, password: '', isActive: a.isActive });
+                            setEditing(a);
+                          }}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          icon={KeyRound}
+                          onClick={() => {
+                            setNewPassword('');
+                            setResetting(a);
+                          }}
+                        >
+                          Password
+                        </Button>
+                        <Button variant="ghost" size="sm" icon={Trash2} className="text-red-600" onClick={() => setRemoving(a)}>
+                          Remove
+                        </Button>
                       </>
-                    )}
-                  </Td>
-                </tr>
+                    )
+                  }
+                >
+                  <KV label="Access">Full access</KV>
+                  <KV label="Last sign-in">{fmtDateTime(a.lastLoginAt)}</KV>
+                </DataCard>
               );
             })}
-          </tbody>
-        </Table>
-      )}
+          </div>
+        )}
       </Card>
 
       <Modal
         open={creating}
         onClose={() => setCreating(false)}
         title="Add administrator"
+        size="sm"
         footer={
           <>
             <Button variant="secondary" onClick={() => setCreating(false)}>
               Cancel
             </Button>
-            <Button
-              loading={saving}
-              onClick={() => run(() => adminApi.post('/admin/admins', { name: form.name, email: form.email, password: form.password, role: form.role, permissions: form.permissions }), 'Administrator created', () => setCreating(false))}
-            >
+            <Button loading={saving} onClick={() => run(() => adminApi.post('/admin/admins', { name: form.name, email: form.email, password: form.password }), 'Administrator created', () => setCreating(false))}>
               Create
             </Button>
           </>
@@ -177,10 +139,9 @@ export default function Administrators() {
           <Field label="Email">
             <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
           </Field>
-          <Field label="Temporary password" hint="At least 8 characters with a letter and a number. Share it securely; they can change it in Settings.">
+          <Field label="Password" hint="At least 8 characters with a letter and a number. They can change it in Settings.">
             <Input type="password" autoComplete="new-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
           </Field>
-          <AccessEditor form={form} setForm={setForm} />
         </div>
       </Modal>
 
@@ -188,12 +149,13 @@ export default function Administrators() {
         open={!!editing}
         onClose={() => setEditing(null)}
         title={`Edit ${editing?.name || ''}`}
+        size="sm"
         footer={
           <>
             <Button variant="secondary" onClick={() => setEditing(null)}>
               Cancel
             </Button>
-            <Button icon={Save} loading={saving} onClick={() => run(() => adminApi.put(`/admin/admins/${editing._id}`, form), 'Access updated', () => setEditing(null))}>
+            <Button icon={Save} loading={saving} onClick={() => run(() => adminApi.put(`/admin/admins/${editing._id}`, { name: form.name, email: form.email, isActive: form.isActive }), 'Administrator updated', () => setEditing(null))}>
               Save
             </Button>
           </>
@@ -206,7 +168,6 @@ export default function Administrators() {
           <Field label="Email">
             <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
           </Field>
-          <AccessEditor form={form} setForm={setForm} />
           <label className="flex items-center gap-3 text-sm">
             <Toggle checked={form.isActive} onChange={(v) => setForm({ ...form, isActive: v })} label="Active" /> Account active (disabled accounts cannot sign in)
           </label>
@@ -246,4 +207,3 @@ export default function Administrators() {
     </div>
   );
 }
-

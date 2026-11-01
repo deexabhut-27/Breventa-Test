@@ -2,7 +2,7 @@ import { AlertTriangle, CheckCircle2, Copy, CopyPlus, ExternalLink, Lock, Pencil
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import DeleteExamDialog from '../../components/admin/DeleteExamDialog.jsx';
-import { Button, Card, CardHeader, ConfirmDialog, ErrorState, PageHeader, Spinner, StatCard, StatusBadge, Table, Td, Th } from '../../components/ui.jsx';
+import { Button, Card, CardHeader, ConfirmDialog, ErrorState, PageHeader, ResponsiveList, Spinner, StatCard, StatusBadge, Table, Td, Th } from '../../components/ui.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { adminApi, errorMessage } from '../../lib/api.js';
 import { examLink, fmtDateTime } from '../../lib/format.js';
@@ -86,7 +86,7 @@ export default function ExamDetail() {
       {exam.status === 'PUBLISHED' && (
         <Card className="mb-6 flex flex-wrap items-center gap-3 p-4">
           <span className="text-sm font-medium text-slate-700">Student link:</span>
-          <code className="flex-1 truncate rounded bg-slate-100 px-3 py-1.5 text-sm">{link}</code>
+          <code className="w-full min-w-0 flex-1 truncate rounded bg-slate-100 px-3 py-1.5 text-sm sm:w-auto">{link}</code>
           <Button
             variant="secondary"
             size="sm"
@@ -120,6 +120,9 @@ export default function ExamDetail() {
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader title="Question availability" subtitle="Active questions in the selected categories" />
+          <ResponsiveList
+            breakpoint="sm"
+            table={
           <Table>
             <thead>
               <tr>
@@ -140,6 +143,19 @@ export default function ExamDetail() {
               ))}
             </tbody>
           </Table>
+            }
+            cards={
+            exam.availability.items.map((i) => (
+              <div key={i.difficulty} className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2.5 text-sm">
+                <span className="font-medium">{i.label}</span>
+                <span className="text-xs text-slate-600">
+                  needs <b>{i.required}</b> · has <b>{i.available}</b> ·{' '}
+                  {i.shortfall ? <span className="font-medium text-red-600">short by {i.shortfall}</span> : <span className="font-medium text-emerald-600">OK</span>}
+                </span>
+              </div>
+            ))
+            }
+          />
           <div className={`m-4 flex gap-2 rounded-lg p-3 text-sm ${exam.availability.ok ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800'}`}>
             {exam.availability.ok ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <AlertTriangle className="h-4 w-4 shrink-0" />}
             {exam.availability.message}
@@ -148,7 +164,7 @@ export default function ExamDetail() {
 
         <Card>
           <CardHeader title="Configuration" />
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-3 p-5 text-sm">
+          <dl className="grid grid-cols-1 gap-x-4 gap-y-3 p-5 text-sm sm:grid-cols-2">
             {[
               ['Duration', `${exam.durationMinutes} minutes`],
               ['Total questions', exam.totalQuestions],
@@ -166,7 +182,7 @@ export default function ExamDetail() {
                 <dd className="font-medium text-slate-800">{v}</dd>
               </div>
             ))}
-            <div className="col-span-2">
+            <div className="sm:col-span-2">
               <dt className="text-xs text-slate-500">Categories</dt>
               <dd className="font-medium text-slate-800">{exam.categories.join(', ')}</dd>
             </div>

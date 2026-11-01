@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Loader2, X } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, Loader2, X } from 'lucide-react';
 import { useEffect } from 'react';
 
 const cx = (...c) => c.filter(Boolean).join(' ');
@@ -58,10 +58,16 @@ export function Textarea({ className, invalid, ...props }) {
 }
 
 export function Select({ className, children, ...props }) {
+  // The native arrow ignores padding and sits flush against the border, so it is hidden
+  // (appearance-none) and replaced by an icon with consistent spacing. The control keeps
+  // native behaviour: the system picker opens on click, tap and keyboard.
   return (
-    <select className={cx(inputBase, 'h-10 border-slate-300 pr-8', className)} {...props}>
-      {children}
-    </select>
+    <div className={cx('relative', className)}>
+      <select className={cx(inputBase, 'h-10 cursor-pointer appearance-none border-slate-300 pr-10 text-ellipsis')} {...props}>
+        {children}
+      </select>
+      <ChevronDown className="pointer-events-none absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden="true" />
+    </div>
   );
 }
 
@@ -156,17 +162,18 @@ export function StatCard({ label, value, icon: Icon, tone = 'brand', hint }) {
     blue: 'bg-sky-50 text-sky-700',
     purple: 'bg-violet-50 text-violet-700',
   };
+  // Compact on phones so stat boxes fit two per row.
   return (
-    <Card className="p-5">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-sm text-slate-500">{label}</p>
-          <p className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">{value}</p>
-          {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
+    <Card className="p-3 sm:p-5">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-xs leading-snug text-slate-500 sm:text-sm">{label}</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums text-slate-900 sm:text-2xl">{value}</p>
+          {hint && <p className="mt-1 text-[11px] leading-snug text-slate-500 sm:text-xs">{hint}</p>}
         </div>
         {Icon && (
-          <div className={cx('rounded-lg p-2.5', tones[tone])}>
-            <Icon className="h-5 w-5" />
+          <div className={cx('shrink-0 rounded-lg p-1.5 sm:p-2.5', tones[tone])}>
+            <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
           </div>
         )}
       </div>
@@ -292,5 +299,46 @@ export function Toggle({ checked, onChange, disabled, label }) {
     >
       <span className={cx('absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform', checked ? 'translate-x-4' : 'translate-x-0.5')} />
     </button>
+  );
+}
+
+// ---------- Responsive lists: full table on wide screens, cards on phones/tablets ----------
+const SHOW_TABLE = { sm: 'hidden sm:block', md: 'hidden md:block', lg: 'hidden lg:block', xl: 'hidden xl:block' };
+const SHOW_CARDS = { sm: 'sm:hidden', md: 'md:hidden', lg: 'lg:hidden', xl: 'xl:hidden' };
+
+/** Renders `table` from the breakpoint up and `cards` below it, so nothing scrolls sideways on phones. */
+export function ResponsiveList({ breakpoint = 'lg', table, cards }) {
+  return (
+    <>
+      <div className={SHOW_TABLE[breakpoint]}>{table}</div>
+      <div className={cx('space-y-3 p-3 sm:p-4', SHOW_CARDS[breakpoint])}>{cards}</div>
+    </>
+  );
+}
+
+/** A record shown as a card: title row with optional badge, key/value grid, and an action row. */
+export function DataCard({ title, subtitle, badge, children, actions, className }) {
+  return (
+    <div className={cx('rounded-xl border border-slate-200 bg-white p-4 shadow-sm', className)}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="font-semibold break-words text-slate-900">{title}</div>
+          {subtitle && <div className="mt-0.5 text-xs break-words text-slate-500">{subtitle}</div>}
+        </div>
+        {badge && <div className="shrink-0">{badge}</div>}
+      </div>
+      {children && <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2.5 text-sm">{children}</dl>}
+      {actions && <div className="mt-3 flex flex-wrap items-center justify-end gap-1 border-t border-slate-100 pt-3">{actions}</div>}
+    </div>
+  );
+}
+
+/** One label/value pair inside a DataCard. `full` spans both columns. */
+export function KV({ label, children, full = false }) {
+  return (
+    <div className={cx('min-w-0', full && 'col-span-2')}>
+      <dt className="text-[11px] font-medium tracking-wide text-slate-500 uppercase">{label}</dt>
+      <dd className="mt-0.5 break-words text-slate-800">{children}</dd>
+    </div>
   );
 }

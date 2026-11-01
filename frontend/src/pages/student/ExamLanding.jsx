@@ -1,9 +1,10 @@
-import { CalendarClock, Clock, ListChecks, UserPlus } from 'lucide-react';
+import { ArrowLeft, ArrowRight, UserPlus } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import CompanyIntro from '../../components/CompanyIntro.jsx';
+import StepIndicator from '../../components/StepIndicator.jsx';
 import { Button, Card, Field, Input, Spinner } from '../../components/ui.jsx';
 import { errorCode, errorMessage, publicApi, studentApi, studentStore } from '../../lib/api.js';
-import { fmtDateTime } from '../../lib/format.js';
 import StudentShell from './StudentShell.jsx';
 
 const EMPTY = { fullName: '', universityName: '', phone: '', email: '', enrollmentNumber: '' };
@@ -22,6 +23,13 @@ function validate(f) {
 export default function ExamLanding() {
   const { slug } = useParams();
   const navigate = useNavigate();
+  // Step 1: company introduction + exam summary. Step 2 (?step=register): student details.
+  const [params, setParams] = useSearchParams();
+  const onForm = params.get('step') === 'register';
+  const goToForm = () => {
+    setParams({ step: 'register' });
+    window.scrollTo(0, 0);
+  };
   const [exam, setExam] = useState(null);
   const [loadError, setLoadError] = useState('');
   const [mode, setMode] = useState('register');
@@ -78,30 +86,36 @@ export default function ExamLanding() {
   if (!exam) return <Spinner className="h-screen" />;
   const closed = exam.status !== 'PUBLISHED' || (exam.endAt && new Date(exam.endAt) < new Date());
 
+  if (!onForm) {
+    return (
+      <StudentShell title={exam.title} wide>
+        <StepIndicator current={1} />
+        <CompanyIntro />
+        {closed ? (
+          <Card className="mt-6 p-6 text-center text-slate-600">Registration for this examination is closed.</Card>
+        ) : (
+          <div className="mt-6 flex justify-end">
+            <Button size="lg" onClick={goToForm} className="w-full sm:w-auto">
+              Next <ArrowRight className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+      </StudentShell>
+    );
+  }
+
   return (
     <StudentShell title={exam.title}>
-      <Card className="mb-6 p-6">
-        <h1 className="text-xl font-semibold">{exam.title}</h1>
-        {exam.description && <p className="mt-2 text-sm text-slate-600">{exam.description}</p>}
-        <div className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
-          <span className="flex items-center gap-2 text-slate-700">
-            <ListChecks className="h-4 w-4 text-brand-600" /> {exam.totalQuestions} questions
-          </span>
-          <span className="flex items-center gap-2 text-slate-700">
-            <Clock className="h-4 w-4 text-brand-600" /> {exam.durationMinutes} minutes
-          </span>
-          {(exam.startAt || exam.endAt) && (
-            <span className="flex items-center gap-2 text-slate-700">
-              <CalendarClock className="h-4 w-4 text-brand-600" /> {exam.startAt ? fmtDateTime(exam.startAt) : 'Open'}
-            </span>
-          )}
-        </div>
-      </Card>
-
+      <StepIndicator current={2} />
+      <button type="button" onClick={() => setParams({})} className="mb-4 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800">
+        <ArrowLeft className="h-4 w-4" /> Back to company details
+      </button>
       {closed ? (
         <Card className="p-6 text-center text-slate-600">Registration for this examination is closed.</Card>
       ) : (
-        <Card className="p-6">
+        <Card className="p-5 sm:p-6">
+          <h1 className="text-lg font-semibold">Student details</h1>
+          <p className="mb-5 text-sm text-slate-500">Enter your details as they appear in your university records.</p>
           <div className="mb-5 flex rounded-lg bg-slate-100 p-1 text-sm">
             {[
               ['register', 'New registration'],
@@ -115,7 +129,7 @@ export default function ExamLanding() {
                   setErrors({});
                   setSubmitError('');
                 }}
-                className={`flex-1 rounded-md px-3 py-2 font-medium ${mode === m ? 'bg-white shadow-sm' : 'text-slate-500'}`}
+                className={`flex-1 rounded-md px-2 py-2 text-xs font-medium sm:px-3 sm:text-sm ${mode === m ? 'bg-white shadow-sm' : 'text-slate-500'}`}
               >
                 {label}
               </button>
@@ -145,7 +159,7 @@ export default function ExamLanding() {
             )}
             {submitError && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{submitError}</p>}
             <Button type="submit" size="lg" className="w-full" loading={busy} icon={UserPlus}>
-              {mode === 'register' ? 'Register' : 'Continue'}
+              {mode === 'register' ? 'Register & continue' : 'Continue'}
             </Button>
           </form>
         </Card>

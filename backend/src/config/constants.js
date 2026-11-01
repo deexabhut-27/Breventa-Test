@@ -24,7 +24,7 @@ export const SUBMISSION_TYPES = ['MANUAL', 'AUTO_TIMEOUT', 'TERMINATED', 'ADMIN_
 
 // Violations that count toward the tab-switch policy.
 export const COUNTED_VIOLATIONS = ['TAB_SWITCH', 'WINDOW_HIDDEN', 'NAVIGATION'];
-// Events that are recorded for auditing but never terminate an attempt on their own.
+// Events that are recorded for monitoring but never terminate an attempt on their own.
 export const LOGGED_EVENTS = [
   'WINDOW_BLUR',
   'PAGE_UNLOAD',
@@ -42,4 +42,17 @@ export const VIOLATION_TYPES = [...COUNTED_VIOLATIONS, ...LOGGED_EVENTS];
 export const VIOLATION_MODES = { STRICT: 'STRICT', WARNING: 'WARNING' };
 
 // Modules an ADMIN can be granted. SUPER_ADMIN always has every permission plus admin management.
-export const PERMISSIONS = ['exams', 'questions', 'students', 'monitoring', 'results'];
+export const PERMISSIONS = ['exams', 'questions', 'students', 'monitoring', 'results', 'candidates', 'admins'];
+
+// Hiring pipeline after the online test.
+export const STAGES = ['ONLINE_TEST', 'ROUND_2', 'FINAL_ROUND', 'SELECTED', 'REJECTED'];
+export const STAGE_LABELS = {
+  ONLINE_TEST: 'Online test',
+  ROUND_2: 'Round 2',
+  FINAL_ROUND: 'Final round',
+  SELECTED: 'Selected',
+  REJECTED: 'Rejected',
+};
+// Where ADVANCE moves a candidate from each active stage.
+export const NEXT_STAGE = { ONLINE_TEST: 'ROUND_2', ROUND_2: 'FINAL_ROUND', FINAL_ROUND: 'SELECTED' };
+export const ACTIVE_STAGES = Object.keys(NEXT_STAGE);

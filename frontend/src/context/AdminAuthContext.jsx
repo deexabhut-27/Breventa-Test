@@ -47,7 +47,7 @@ export function RequirePermission({ permission, superAdmin, children }) {
   return (
     <div className="flex min-h-[50vh] flex-col items-center justify-center text-center">
       <p className="text-lg font-semibold text-slate-800">No access</p>
-      <p className="mt-1 max-w-md text-sm text-slate-500">You have not been given access to this section. Ask a super admin to grant it from Settings → Administrators.</p>
+      <p className="mt-1 max-w-md text-sm text-slate-500">You don't have access to this section. Ask another administrator for help.</p>
     </div>
   );
 }

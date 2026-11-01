@@ -5,4 +5,4 @@ export { Student } from './Student.js';
 export { Attempt } from './Attempt.js';
 export { StudentResponse } from './StudentResponse.js';
 export { Result } from './Result.js';
-export { AuditLog } from './AuditLog.js';
+export { CandidateNote } from './CandidateNote.js';

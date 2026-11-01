@@ -118,7 +118,6 @@ export async function adminTerminate(req, res) {
     status: ATTEMPT_STATUS.TERMINATED,
     submissionType: 'TERMINATED',
     reason: `Terminated by administrator: ${req.body.reason}`,
-    actor: { type: 'ADMIN', id: req.admin._id },
   });
   if (!finalized) throw AppError.conflict(`Attempt is already ${attempt.status.toLowerCase()}`, 'ATTEMPT_CLOSED');
   res.json({ success: true, data: { id: attempt._id, status: attempt.status } });
@@ -128,7 +127,6 @@ export async function adminForceSubmit(req, res) {
   const { finalized, attempt } = await finalizeAttempt(req.params.id, {
     status: ATTEMPT_STATUS.COMPLETED,
     submissionType: 'ADMIN_FORCED',
-    actor: { type: 'ADMIN', id: req.admin._id },
   });
   if (!finalized) throw AppError.conflict(`Attempt is already ${attempt.status.toLowerCase()}`, 'ATTEMPT_CLOSED');
   res.json({ success: true, data: { id: attempt._id, status: attempt.status } });

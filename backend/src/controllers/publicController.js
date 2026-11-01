@@ -1,8 +1,8 @@
 import { Examination, Student } from '../models/index.js';
 import { EXAM_STATUS } from '../config/constants.js';
-import { audit } from '../services/auditService.js';
 import { publicExamView } from '../services/examService.js';
 import { signStudentToken } from '../services/tokenService.js';
+import { studentCache } from '../services/cache.js';
 import { AppError } from '../utils/AppError.js';
 import { isDuplicateKeyError } from '../utils/helpers.js';
 
@@ -47,17 +47,8 @@ export async function register(req, res) {
   assertRegistrationOpen(exam);
   const { fullName, universityName, phone, email, enrollmentNumber } = req.body;
 
-  const or = [{ email }, { phone }];
-  if (enrollmentNumber) or.push({ enrollmentNumber });
-  const existing = await Student.findOne({ examination: exam._id, $or: or }).lean();
-  if (existing) {
-    const field = existing.email === email ? 'email address' : existing.phone === phone ? 'phone number' : 'enrollment number';
-    throw AppError.conflict(
-      `This ${field} is already registered for this examination. Use "Already registered? Continue" with your email and phone number.`,
-      'ALREADY_REGISTERED',
-    );
-  }
-
+  // One write: the unique indexes (exam + email / phone / enrollment) reject duplicates,
+  // and the error says which field clashed. No separate lookup first.
   let student;
   try {
     student = await Student.create({
@@ -71,10 +62,15 @@ export async function register(req, res) {
       userAgent: req.get('user-agent')?.slice(0, 300),
     });
   } catch (err) {
-    if (isDuplicateKeyError(err)) throw AppError.conflict('You are already registered for this examination.', 'ALREADY_REGISTERED');
-    throw err;
+    if (!isDuplicateKeyError(err)) throw err;
+    const key = Object.keys(err.keyValue || err.keyPattern || {}).find((k) => k !== 'examination');
+    const field = key === 'phone' ? 'phone number' : key === 'enrollmentNumber' ? 'enrollment number' : 'email address';
+    throw AppError.conflict(
+      `This ${field} is already registered for this examination. Use "Already registered? Continue" with your email and phone number.`,
+      'ALREADY_REGISTERED',
+    );
   }
-  await audit({ actorType: 'STUDENT', actorId: student._id, action: 'STUDENT_REGISTERED', entityType: 'Student', entityId: student._id, ip: req.ip });
+  studentCache.set(student._id, student.toObject()); // the next request (START) needs no lookup
   res.status(201).json({ success: true, data: { token: signStudentToken(student), student: studentView(student) } });
 }
 

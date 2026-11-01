@@ -1,10 +1,10 @@
 import { KeyRound, Save } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
-import { Badge, Button, Card, CardHeader, Field, Input, PageHeader, Pagination, Spinner, Table, Td, Th } from '../../components/ui.jsx';
+import { useState } from 'react';
+import { Button, Card, CardHeader, Field, Input, PageHeader } from '../../components/ui.jsx';
 import { useAdminAuth } from '../../context/AdminAuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { adminApi, errorMessage } from '../../lib/api.js';
-import { fmtDateTime, humanize } from '../../lib/format.js';
+import { fmtDateTime } from '../../lib/format.js';
 
 function Profile() {
   const { admin, setAdmin } = useAdminAuth();
@@ -25,7 +25,7 @@ function Profile() {
   };
   return (
     <Card>
-      <CardHeader title="Profile" subtitle={`Role: ${humanize(admin.role)} · last sign-in ${fmtDateTime(admin.lastLoginAt)}`} />
+      <CardHeader title="Profile" subtitle={`Administrator (full access) · last sign-in ${fmtDateTime(admin.lastLoginAt)}`} />
       <div className="space-y-4 p-5">
         <Field label="Name">
           <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
@@ -82,50 +82,6 @@ function Password() {
   );
 }
 
-function AuditLog() {
-  const [page, setPage] = useState(1);
-  const [data, setData] = useState(null);
-  useEffect(() => {
-    adminApi.get('/admin/audit-logs', { params: { page, limit: 15 } }).then((res) => setData(res.data)).catch(() => setData({ data: [], meta: null }));
-  }, [page]);
-  return (
-    <Card className="lg:col-span-2">
-      <CardHeader title="Audit log" subtitle="Security-relevant actions across the system" />
-      {!data ? (
-        <Spinner />
-      ) : (
-        <>
-          <Table>
-            <thead>
-              <tr>
-                <Th>Time</Th>
-                <Th>Action</Th>
-                <Th>Actor</Th>
-                <Th>Details</Th>
-                <Th>IP</Th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {data.data.map((l) => (
-                <tr key={l._id}>
-                  <Td className="text-xs whitespace-nowrap">{fmtDateTime(l.createdAt)}</Td>
-                  <Td>
-                    <Badge>{humanize(l.action)}</Badge>
-                  </Td>
-                  <Td className="text-xs">{humanize(l.actorType)}</Td>
-                  <Td className="max-w-md truncate text-xs text-slate-500">{l.details ? JSON.stringify(l.details) : '—'}</Td>
-                  <Td className="text-xs">{l.ip || '—'}</Td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-          <Pagination meta={data.meta} onPage={setPage} />
-        </>
-      )}
-    </Card>
-  );
-}
-
 export default function Settings() {
   const { admin } = useAdminAuth();
   return (
@@ -134,7 +90,6 @@ export default function Settings() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Profile />
         <Password />
-        {admin.role === 'SUPER_ADMIN' && <AuditLog />}
       </div>
     </div>
   );

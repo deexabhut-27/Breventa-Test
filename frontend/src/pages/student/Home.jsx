@@ -1,6 +1,7 @@
 import { CalendarClock, ChevronRight, Clock, ListChecks } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
+import CompanyIntro from '../../components/CompanyIntro.jsx';
 import { Card, Spinner } from '../../components/ui.jsx';
 import { ADMIN_TOKEN_KEY, adminApi, errorMessage, publicApi } from '../../lib/api.js';
 import { fmtDateTime } from '../../lib/format.js';
@@ -38,9 +39,10 @@ export default function Home() {
 
   return (
     <StudentShell title="Online Examinations" wide>
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-slate-900">Welcome</h1>
-        <p className="mt-1 text-sm text-slate-600">Select your examination to register, or open the examination link shared by your placement cell.</p>
+      <CompanyIntro />
+      <div className="mt-8 mb-4">
+        <h2 className="text-lg font-semibold text-slate-900">Open examinations</h2>
+        <p className="mt-1 text-sm text-slate-600">Select your examination to continue, or open the examination link shared by your placement cell.</p>
       </div>
       {error ? (
         <Card className="p-6 text-center text-red-700">{error}</Card>

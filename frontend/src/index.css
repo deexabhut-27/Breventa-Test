@@ -2,12 +2,13 @@
 
 @theme {
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --color-brand-50: #eef2ff;
-  --color-brand-100: #e0e7ff;
-  --color-brand-500: #3b5bdb;
-  --color-brand-600: #2f4ac0;
-  --color-brand-700: #1e3a8a;
-  --color-brand-900: #172554;
+  /* Breventa brand: #2069f3 (blue) and #002c87 (navy), sampled from the company logo */
+  --color-brand-50: #eef4ff;
+  --color-brand-100: #dbe7ff;
+  --color-brand-500: #2069f3;
+  --color-brand-600: #1a58d4;
+  --color-brand-700: #002c87;
+  --color-brand-900: #001b55;
 }
 
 html,
@@ -24,3 +25,14 @@ body {
   user-select: none;
   -webkit-user-select: none;
 }
+
+/* Rich-text notes (editor and saved notes). Tailwind's reset removes list bullets and heading sizes. */
+.rich p { margin: 0 0 0.4rem; }
+.rich p:last-child { margin-bottom: 0; }
+.rich ul { list-style: disc; padding-left: 1.25rem; margin: 0.25rem 0 0.5rem; }
+.rich ol { list-style: decimal; padding-left: 1.25rem; margin: 0.25rem 0 0.5rem; }
+.rich li > p { margin: 0; }
+.rich h3 { font-size: 0.95rem; font-weight: 600; margin: 0.5rem 0 0.25rem; color: var(--color-slate-900); }
+.rich strong, .rich b { font-weight: 600; }
+.rich a { color: var(--color-brand-600); text-decoration: underline; }
+.rich blockquote { border-left: 3px solid var(--color-slate-300); padding-left: 0.75rem; color: var(--color-slate-600); }

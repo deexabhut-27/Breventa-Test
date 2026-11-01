@@ -1,6 +1,5 @@
 import mongoose from 'mongoose';
 import { Attempt, Examination, Question, Result, Student } from '../models/index.js';
-import { ATTEMPT_STATUS } from '../config/constants.js';
 
 export async function getDashboard(req, res) {
   const examId = req.query.exam && mongoose.isValidObjectId(req.query.exam) ? new mongoose.Types.ObjectId(req.query.exam) : null;
@@ -8,7 +7,7 @@ export async function getDashboard(req, res) {
   const since = new Date(Date.now() - 13 * 24 * 3600 * 1000);
   since.setHours(0, 0, 0, 0);
 
-  const [students, statusCounts, scoreAgg, distribution, perExam, universities, recent, daily, questionCounts, examCounts] = await Promise.all([
+  const [students, statusCounts, scoreAgg, distribution, perExam, universities, recent, daily, questionCounts, examCounts, pipeline] = await Promise.all([
     Student.countDocuments(byExam),
     Attempt.aggregate([{ $match: byExam }, { $group: { _id: '$status', count: { $sum: 1 } } }]),
     Result.aggregate([
@@ -49,6 +48,8 @@ export async function getDashboard(req, res) {
     ]),
     Question.aggregate([{ $match: { isActive: true } }, { $group: { _id: '$difficulty', count: { $sum: 1 } } }]),
     Examination.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
+    // Selection pipeline: only students who finished the online test.
+    Student.aggregate([{ $match: { ...byExam, latestResult: { $exists: true } } }, { $group: { _id: '$stage', count: { $sum: 1 } } }]),
   ]);
 
   const status = Object.fromEntries(statusCounts.map((s) => [s._id, s.count]));
@@ -81,6 +82,7 @@ export async function getDashboard(req, res) {
       dailyAttempts: daily.map((d) => ({ date: d._id, count: d.count })),
       questionBank: Object.fromEntries(questionCounts.map((q) => [q._id, q.count])),
       examinations: Object.fromEntries(examCounts.map((e) => [e._id, e.count])),
+      pipeline: Object.fromEntries(['ONLINE_TEST', 'ROUND_2', 'FINAL_ROUND', 'SELECTED', 'REJECTED'].map((st) => [st, pipeline.filter((p) => (p._id || 'ONLINE_TEST') === st).reduce((a, p) => a + p.count, 0)])),
     },
   });
 }

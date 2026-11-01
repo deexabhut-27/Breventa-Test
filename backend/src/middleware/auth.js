@@ -1,5 +1,6 @@
 import { Admin, Student } from '../models/index.js';
 import { verifyToken } from '../services/tokenService.js';
+import { adminCache, studentCache } from '../services/cache.js';
 import { AppError } from '../utils/AppError.js';
 
 function bearer(req) {
@@ -20,7 +21,8 @@ export async function requireAdmin(req, _res, next) {
   const token = bearer(req);
   if (!token) return next(AppError.unauthorized());
   const payload = decode(token, 'admin');
-  const admin = await Admin.findById(payload.sub).select('+passwordHash');
+  const raw = await adminCache.getOrLoad(payload.sub, () => Admin.findById(payload.sub).select('+passwordHash').lean());
+  const admin = raw ? Admin.hydrate(raw) : null;
   if (!admin || !admin.isActive) return next(AppError.unauthorized('Account not found or disabled'));
   if (admin.passwordChangedAt && payload.iat * 1000 < admin.passwordChangedAt.getTime() - 1000) {
     return next(AppError.unauthorized('Password changed, please sign in again', 'TOKEN_REVOKED'));
@@ -46,16 +48,16 @@ export async function requireStudent(req, _res, next) {
   const token = bearer(req);
   if (!token) return next(AppError.unauthorized());
   const payload = decode(token, 'student');
-  const student = await Student.findById(payload.sub);
-  if (!student) return next(AppError.unauthorized('Registration not found'));
-  req.student = student;
+  const raw = await studentCache.getOrLoad(payload.sub, () => Student.findById(payload.sub).select('-notes').lean());
+  if (!raw) return next(AppError.unauthorized('Registration not found'));
+  req.student = Student.hydrate(raw);
   return next();
 }
 
 /** Used by the sendBeacon endpoint, which cannot set headers. */
 export async function studentFromRawToken(token) {
   const payload = decode(token, 'student');
-  const student = await Student.findById(payload.sub);
-  if (!student) throw AppError.unauthorized('Registration not found');
-  return student;
+  const raw = await studentCache.getOrLoad(payload.sub, () => Student.findById(payload.sub).select('-notes').lean());
+  if (!raw) throw AppError.unauthorized('Registration not found');
+  return Student.hydrate(raw);
 }

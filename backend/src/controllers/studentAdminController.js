@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { Attempt, Result, Student } from '../models/index.js';
-import { audit } from '../services/auditService.js';
+import { studentCache } from '../services/cache.js';
 import { deleteStudents } from '../services/deletionService.js';
 import { AppError } from '../utils/AppError.js';
 import { escapeRegex, pageMeta } from '../utils/helpers.js';
@@ -30,8 +30,8 @@ export async function listStudents(req, res) {
           pipeline: [{ $sort: { attemptNumber: -1 } }, { $limit: 1 }, { $project: { status: 1, startedAt: 1, endedAt: 1, violationCount: 1 } }],
         },
       },
-      { $lookup: { from: 'results', localField: '_id', foreignField: 'student', as: 'result', pipeline: [{ $sort: { endedAt: -1 } }, { $limit: 1 }, { $project: { percentage: 1, passed: 1, totalScore: 1 } }] } },
-      { $addFields: { exam: { $first: '$exam' }, attempt: { $first: '$attempt' }, result: { $first: '$result' } } },
+      { $addFields: { exam: { $first: '$exam' }, attempt: { $first: '$attempt' }, result: '$latestResult' } },
+      { $project: { latestResult: 0, 'notes.html': 0 } },
     ]),
     Student.countDocuments(match),
   ]);
@@ -61,7 +61,6 @@ export async function updateStudent(req, res) {
     throw AppError.conflict(`Another student in this examination already uses this ${field}`, 'ALREADY_REGISTERED');
   }
 
-  const before = { fullName: student.fullName, universityName: student.universityName, phone: student.phone, email: student.email, enrollmentNumber: student.enrollmentNumber };
   student.set({ fullName, universityName, phone, email, enrollmentNumber: enrollmentNumber || undefined });
   await student.save();
   // Results keep a denormalised copy for fast filtering and exports.
@@ -69,7 +68,7 @@ export async function updateStudent(req, res) {
     { student: student._id },
     { $set: { studentName: fullName, universityName, phone, email, enrollmentNumber: enrollmentNumber || undefined } },
   );
-  await audit({ actorType: 'ADMIN', actorId: req.admin._id, action: 'STUDENT_UPDATED', entityType: 'Student', entityId: student._id, details: { before }, ip: req.ip });
+  studentCache.delete(student._id);
   res.json({ success: true, data: student });
 }
 
@@ -77,13 +76,6 @@ export async function deleteStudent(req, res) {
   const student = await Student.findById(req.params.id);
   if (!student) throw AppError.notFound('Student not found');
   const removed = await deleteStudents([student._id]);
-  await audit({
-    actorType: 'ADMIN',
-    actorId: req.admin._id,
-    action: 'STUDENT_DELETED',
-    entityType: 'Student',
-    details: { email: student.email, fullName: student.fullName, ...removed },
-    ip: req.ip,
-  });
+  studentCache.delete(student._id);
   res.json({ success: true, data: { id: student._id, removed } });
 }

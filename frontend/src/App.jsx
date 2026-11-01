@@ -1,28 +1,34 @@
+import { Suspense, lazy } from 'react';
 import { Route, Routes } from 'react-router-dom';
+import { Spinner } from './components/ui.jsx';
 import AdminLayout from './components/admin/AdminLayout.jsx';
 import { AdminAuthProvider, RequireAdmin, RequirePermission } from './context/AdminAuthContext.jsx';
-import Administrators from './pages/admin/Administrators.jsx';
-import Dashboard from './pages/admin/Dashboard.jsx';
-import ExamDetail from './pages/admin/ExamDetail.jsx';
-import ExamEditor from './pages/admin/ExamEditor.jsx';
-import Exams from './pages/admin/Exams.jsx';
-import Login from './pages/admin/Login.jsx';
-import Monitoring from './pages/admin/Monitoring.jsx';
-import Questions from './pages/admin/Questions.jsx';
-import ResultDetail from './pages/admin/ResultDetail.jsx';
-import Results from './pages/admin/Results.jsx';
-import Settings from './pages/admin/Settings.jsx';
-import Students from './pages/admin/Students.jsx';
-import ExamLanding from './pages/student/ExamLanding.jsx';
-import ExamRoom from './pages/student/ExamRoom.jsx';
-import Finished from './pages/student/Finished.jsx';
-import Instructions from './pages/student/Instructions.jsx';
-import NotFound from './pages/NotFound.jsx';
-import Home from './pages/student/Home.jsx';
+const Administrators = lazy(() => import('./pages/admin/Administrators.jsx'));
+const Dashboard = lazy(() => import('./pages/admin/Dashboard.jsx'));
+const ExamDetail = lazy(() => import('./pages/admin/ExamDetail.jsx'));
+const ExamEditor = lazy(() => import('./pages/admin/ExamEditor.jsx'));
+const Exams = lazy(() => import('./pages/admin/Exams.jsx'));
+const Login = lazy(() => import('./pages/admin/Login.jsx'));
+const Monitoring = lazy(() => import('./pages/admin/Monitoring.jsx'));
+const Questions = lazy(() => import('./pages/admin/Questions.jsx'));
+const ResultDetail = lazy(() => import('./pages/admin/ResultDetail.jsx'));
+const Results = lazy(() => import('./pages/admin/Results.jsx'));
+const Selection = lazy(() => import('./pages/admin/Selection.jsx'));
+const Settings = lazy(() => import('./pages/admin/Settings.jsx'));
+const Students = lazy(() => import('./pages/admin/Students.jsx'));
+const ExamLanding = lazy(() => import('./pages/student/ExamLanding.jsx'));
+const ExamRoom = lazy(() => import('./pages/student/ExamRoom.jsx'));
+const Finished = lazy(() => import('./pages/student/Finished.jsx'));
+const Instructions = lazy(() => import('./pages/student/Instructions.jsx'));
+const NotFound = lazy(() => import('./pages/NotFound.jsx'));
+const Home = lazy(() => import('./pages/student/Home.jsx'));
 
+// Each page is downloaded only when visited, so students opening an exam link never download
+// the admin panel, charts or the notes editor.
 export default function App() {
   return (
-    <Routes>
+    <Suspense fallback={<Spinner className="h-screen" />}>
+      <Routes>
       <Route path="/" element={<Home />} />
 
       <Route path="/exam/:slug" element={<ExamLanding />} />
@@ -32,7 +38,8 @@ export default function App() {
 
       <Route path="/admin/*" element={<AdminAuthProvider><AdminRoutes /></AdminAuthProvider>} />
       <Route path="*" element={<NotFound />} />
-    </Routes>
+      </Routes>
+    </Suspense>
   );
 }
 
@@ -52,7 +59,8 @@ function AdminRoutes() {
         <Route path="results" element={<RequirePermission permission="results"><Results key="results" /></RequirePermission>} />
         <Route path="results/:id" element={<RequirePermission permission="results"><ResultDetail /></RequirePermission>} />
         <Route path="terminated" element={<RequirePermission permission="results"><Results key="terminated" terminatedOnly /></RequirePermission>} />
-        <Route path="administrators" element={<RequirePermission superAdmin><Administrators /></RequirePermission>} />
+        <Route path="selection" element={<RequirePermission permission="candidates"><Selection /></RequirePermission>} />
+        <Route path="administrators" element={<RequirePermission permission="admins"><Administrators /></RequirePermission>} />
         <Route path="settings" element={<Settings />} />
         <Route path="*" element={<NotFound admin />} />
       </Route>

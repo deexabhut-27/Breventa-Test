@@ -55,6 +55,7 @@ const resultSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+resultSchema.index({ student: 1, endedAt: -1 });
 resultSchema.index({ examination: 1, totalScore: -1 });
 resultSchema.index({ universityName: 1 });
 resultSchema.index({ status: 1, passed: 1 });
