@@ -3,7 +3,8 @@ import { z } from 'zod';
 
 const isTest = process.env.NODE_ENV === 'test';
 // Vercel (serverless) sets VERCEL=1; there the API sits behind Vercel's proxy and has no long-running process.
-const isServerless = !!process.env.VERCEL;
+// VERCEL_ENV / VERCEL_URL / AWS_LAMBDA_FUNCTION_NAME cover projects with system variables hidden.
+const isServerless = !!(process.env.VERCEL || process.env.VERCEL_ENV || process.env.VERCEL_URL || process.env.AWS_LAMBDA_FUNCTION_NAME);
 
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
