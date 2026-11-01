@@ -34,10 +34,15 @@ export const LOGGED_EVENTS = [
   'RECONNECTED',
   'SESSION_REPLACED',
   'FULLSCREEN_EXIT',
-  'COPY_ATTEMPT',
+  'PASTE_ATTEMPT',
   'CONTEXT_MENU',
 ];
-export const VIOLATION_TYPES = [...COUNTED_VIOLATIONS, ...LOGGED_EVENTS];
+// Screen capture (screenshot keys, print) terminates the attempt immediately, regardless of policy.
+export const INSTANT_TERMINATION_VIOLATIONS = ['SCREENSHOT_ATTEMPT'];
+// Copying question content: COPY_WARNINGS_ALLOWED warning(s), then the next copy terminates.
+export const COPY_VIOLATIONS = ['COPY_ATTEMPT'];
+export const COPY_WARNINGS_ALLOWED = 1;
+export const VIOLATION_TYPES = [...COUNTED_VIOLATIONS, ...LOGGED_EVENTS, ...INSTANT_TERMINATION_VIOLATIONS, ...COPY_VIOLATIONS];
 
 export const VIOLATION_MODES = { STRICT: 'STRICT', WARNING: 'WARNING' };
 

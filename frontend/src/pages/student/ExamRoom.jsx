@@ -52,6 +52,8 @@ export default function ExamRoom() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [errorText, setErrorText] = useState('');
   const [navNotice, setNavNotice] = useState(false);
+  const [copyWarning, setCopyWarning] = useState(null);
+  const [shielded, setShielded] = useState(false);
 
   const queueRef = useRef(null);
   const responsesRef = useRef({});
@@ -222,6 +224,7 @@ export default function ExamRoom() {
         const res = await api.post('/student/attempt/violations', { ...event, pendingResponses: queueRef.current?.snapshot() || [] });
         const result = res.data.data;
         if (result.terminated) finish();
+        else if (event.type === 'COPY_ATTEMPT') setCopyWarning(result);
         else if (COUNTED.includes(event.type)) setWarning(result);
       } catch (err) {
         if (handleApiError(err)) return;
@@ -241,6 +244,7 @@ export default function ExamRoom() {
     report,
     log,
     onBlockedNavigation: () => setNavNotice(true),
+    onShield: setShielded,
   });
 
   // ---------- Answering ----------
@@ -381,7 +385,12 @@ export default function ExamRoom() {
       )}
 
       <div className="flex min-h-0 flex-1">
-        <main className="flex min-w-0 flex-1 flex-col">
+        <main className="relative flex min-w-0 flex-1 flex-col">
+          {shielded && (
+            <div className="absolute inset-0 z-40 flex items-center justify-center bg-slate-900 p-6 text-center text-sm text-white">
+              Questions are hidden while the examination window is not in focus. Click here to continue.
+            </div>
+          )}
           <div className="flex-1 overflow-y-auto p-4 sm:p-8">
             <div className="mx-auto max-w-3xl">
               <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
@@ -510,6 +519,18 @@ export default function ExamRoom() {
                   ? 'If you leave the page again, your examination will be terminated.'
                   : `${warning.remainingBeforeTermination - 1} more warning(s) remain before termination.`}
               </b>
+            </p>
+          </div>
+        )}
+      </Modal>
+
+      <Modal open={!!copyWarning} title="Warning: copying is not allowed" size="sm" footer={<Button onClick={() => setCopyWarning(null)}>I understand</Button>}>
+        {copyWarning && (
+          <div className="flex gap-3 text-sm text-slate-700">
+            <AlertTriangle className="h-6 w-6 shrink-0 text-red-500" />
+            <p>
+              Copying question content was detected and recorded.{' '}
+              <b>If you try to copy again, your examination will be terminated.</b>
             </p>
           </div>
         )}

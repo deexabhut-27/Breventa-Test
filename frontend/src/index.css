@@ -24,6 +24,15 @@ body {
 .exam-no-select {
   user-select: none;
   -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.exam-no-select img {
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+/* Questions never appear on paper or in "Save as PDF". */
+@media print {
+  .exam-no-select { display: none !important; }
 }
 
 /* Rich-text notes (editor and saved notes). Tailwind's reset removes list bullets and heading sizes. */

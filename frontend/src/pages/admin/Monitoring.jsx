@@ -7,7 +7,7 @@ import { adminApi, errorMessage } from '../../lib/api.js';
 import { fmtClock, fmtTime, humanize } from '../../lib/format.js';
 
 const REFRESH_MS = 5000;
-const EVENT_COLOR = { TAB_SWITCH: 'red', WINDOW_HIDDEN: 'red', NAVIGATION: 'red', HEARTBEAT_LOST: 'amber', SESSION_REPLACED: 'purple', PAGE_UNLOAD: 'amber', PAGE_RELOAD: 'blue' };
+const EVENT_COLOR = { TAB_SWITCH: 'red', WINDOW_HIDDEN: 'red', NAVIGATION: 'red', HEARTBEAT_LOST: 'amber', SESSION_REPLACED: 'purple', PAGE_UNLOAD: 'amber', PAGE_RELOAD: 'blue', SCREENSHOT_ATTEMPT: 'red', COPY_ATTEMPT: 'red' };
 
 export default function Monitoring() {
   const toast = useToast();

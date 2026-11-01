@@ -285,6 +285,30 @@ describe('anti-cheating', () => {
     expect((await Attempt.findById(payload.attemptId)).violationCount).toBe(2);
   });
 
+  it('terminates immediately on a screenshot attempt, even in WARNING mode', async () => {
+    const warnExam = await createExam({ slug: 'shot-1', violationPolicy: { mode: 'WARNING', warningsAllowed: 3, heartbeatTimeoutSeconds: 45, disconnectAction: 'FLAG', maxDisconnectSeconds: 300 } });
+    const { payload, headers } = await startExam(warnExam);
+    const res = await violation(headers, { type: 'SCREENSHOT_ATTEMPT', eventId: 's1', reason: 'PrintScreen key pressed' });
+    expect(res.body.data.terminated).toBe(true);
+    const attempt = await Attempt.findById(payload.attemptId);
+    expect(attempt.status).toBe('TERMINATED');
+    expect(attempt.terminationReason).toMatch(/screenshot/i);
+  });
+
+  it('warns on the first copy and terminates on the second', async () => {
+    const warnExam = await createExam({ slug: 'copy-1', violationPolicy: { mode: 'WARNING', warningsAllowed: 3, heartbeatTimeoutSeconds: 45, disconnectAction: 'FLAG', maxDisconnectSeconds: 300 } });
+    const { payload, headers } = await startExam(warnExam);
+    const first = await violation(headers, { type: 'COPY_ATTEMPT', eventId: 'c1' });
+    expect(first.body.data).toMatchObject({ terminated: false, copyCount: 1, violationCount: 0 });
+    // Same event delivered twice is not a second copy.
+    expect((await violation(headers, { type: 'COPY_ATTEMPT', eventId: 'c1' })).body.data.terminated).toBe(false);
+    const second = await violation(headers, { type: 'COPY_ATTEMPT', eventId: 'c2' });
+    expect(second.body.data.terminated).toBe(true);
+    const attempt = await Attempt.findById(payload.attemptId);
+    expect(attempt.status).toBe('TERMINATED');
+    expect(attempt.terminationReason).toMatch(/copied/i);
+  });
+
   it('ignores duplicate events (XHR + beacon for the same switch)', async () => {
     const warnExam = await createExam({ slug: 'warn-2', violationPolicy: { mode: 'WARNING', warningsAllowed: 2, heartbeatTimeoutSeconds: 45, disconnectAction: 'FLAG', maxDisconnectSeconds: 300 } });
     const { payload, headers, token } = await startExam(warnExam);

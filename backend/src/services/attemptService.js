@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Attempt, Question, StudentResponse } from '../models/index.js';
-import { ATTEMPT_STATUS, COUNTED_VIOLATIONS } from '../config/constants.js';
+import { ATTEMPT_STATUS, COPY_VIOLATIONS, COPY_WARNINGS_ALLOWED, COUNTED_VIOLATIONS, INSTANT_TERMINATION_VIOLATIONS } from '../config/constants.js';
 import { env } from '../config/env.js';
 import { AppError } from '../utils/AppError.js';
 import { isDuplicateKeyError } from '../utils/helpers.js';
@@ -24,7 +24,9 @@ export const VIOLATION_LABELS = {
   RECONNECTED: 'Connection restored',
   SESSION_REPLACED: 'Examination opened in a new session',
   FULLSCREEN_EXIT: 'Exited full screen',
-  COPY_ATTEMPT: 'Copy attempt',
+  COPY_ATTEMPT: 'Copied question content',
+  PASTE_ATTEMPT: 'Paste attempt',
+  SCREENSHOT_ATTEMPT: 'Screenshot or screen capture attempt',
   CONTEXT_MENU: 'Context menu opened',
 };
 
@@ -323,6 +325,8 @@ function violationSummary(attempt, extra = {}) {
     violationCount: attempt.violationCount,
     maxViolations: max,
     remainingBeforeTermination: Math.max(0, max - attempt.violationCount),
+    copyCount: attempt.copyCount ?? 0,
+    copyWarningsAllowed: COPY_WARNINGS_ALLOWED,
     terminationReason: attempt.terminationReason,
     ...extra,
   };
@@ -330,23 +334,42 @@ function violationSummary(attempt, extra = {}) {
 
 /**
  * Records a monitoring event. Counted violations (tab switch, hidden window, navigation)
- * terminate the attempt once policy.maxViolations is reached. Duplicate eventIds are ignored.
+ * terminate the attempt once policy.maxViolations is reached. Screen capture terminates
+ * immediately; copying terminates after COPY_WARNINGS_ALLOWED warnings. Duplicate eventIds are ignored.
  */
 export async function recordViolation(attemptId, { type, reason, eventId, clientAt, source = 'CLIENT' }) {
   const counted = COUNTED_VIOLATIONS.includes(type);
+  const isCopy = COPY_VIOLATIONS.includes(type);
+  const instant = INSTANT_TERMINATION_VIOLATIONS.includes(type);
+  const inc = { ...(counted ? { violationCount: 1 } : {}), ...(isCopy ? { copyCount: 1 } : {}) };
   const entry = { type, counted, reason: reason || VIOLATION_LABELS[type], eventId, clientAt, source, at: new Date() };
   const filter = { _id: attemptId, status: ATTEMPT_STATUS.IN_PROGRESS };
   if (eventId) filter['violations.eventId'] = { $ne: eventId };
 
   const updated = await Attempt.findOneAndUpdate(
     filter,
-    { $push: { violations: entry }, ...(counted ? { $inc: { violationCount: 1 } } : {}) },
-    { new: true, projection: { violationCount: 1, policy: 1, status: 1, terminationReason: 1 } },
+    { $push: { violations: entry }, ...(Object.keys(inc).length ? { $inc: inc } : {}) },
+    { new: true, projection: { violationCount: 1, copyCount: 1, policy: 1, status: 1, terminationReason: 1 } },
   );
   if (!updated) {
-    const current = await Attempt.findById(attemptId).select('violationCount policy status terminationReason');
+    const current = await Attempt.findById(attemptId).select('violationCount copyCount policy status terminationReason');
     if (!current) throw AppError.notFound('Attempt not found');
     return violationSummary(current, { duplicate: true });
+  }
+
+  let terminateReason = null;
+  if (instant) {
+    terminateReason = `${VIOLATION_LABELS[type]} detected`;
+  } else if (isCopy && updated.copyCount > COPY_WARNINGS_ALLOWED) {
+    terminateReason = `${VIOLATION_LABELS[type]} again after ${COPY_WARNINGS_ALLOWED} warning(s)`;
+  }
+  if (terminateReason) {
+    const { attempt } = await finalizeAttempt(updated._id, {
+      status: ATTEMPT_STATUS.TERMINATED,
+      submissionType: 'TERMINATED',
+      reason: terminateReason,
+    });
+    return violationSummary(attempt);
   }
 
   if (counted && updated.violationCount >= updated.policy.maxViolations) {

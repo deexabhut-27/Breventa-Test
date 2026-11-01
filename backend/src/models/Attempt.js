@@ -53,6 +53,8 @@ const attemptSchema = new mongoose.Schema(
     connectionState: { type: String, enum: ['ONLINE', 'DISCONNECTED'], default: 'ONLINE' },
     violations: { type: [violationSchema], default: [] },
     violationCount: { type: Number, default: 0 },
+    // Copy attempts are tracked separately from the tab-switch policy (see COPY_WARNINGS_ALLOWED).
+    copyCount: { type: Number, default: 0 },
     terminationReason: String,
     evaluated: { type: Boolean, default: false },
     ipAddress: String,
