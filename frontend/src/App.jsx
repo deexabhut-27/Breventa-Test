@@ -15,6 +15,7 @@ const ResultDetail = lazy(() => import('./pages/admin/ResultDetail.jsx'));
 const Results = lazy(() => import('./pages/admin/Results.jsx'));
 const Selection = lazy(() => import('./pages/admin/Selection.jsx'));
 const Settings = lazy(() => import('./pages/admin/Settings.jsx'));
+const Universities = lazy(() => import('./pages/admin/Universities.jsx'));
 const Students = lazy(() => import('./pages/admin/Students.jsx'));
 const ExamLanding = lazy(() => import('./pages/student/ExamLanding.jsx'));
 const ExamRoom = lazy(() => import('./pages/student/ExamRoom.jsx'));
@@ -50,6 +51,7 @@ function AdminRoutes() {
       <Route element={<RequireAdmin><AdminLayout /></RequireAdmin>}>
         <Route index element={<Dashboard />} />
         <Route path="students" element={<RequirePermission permission="students"><Students /></RequirePermission>} />
+        <Route path="universities" element={<RequirePermission permission="students"><Universities /></RequirePermission>} />
         <Route path="exams" element={<RequirePermission permission="exams"><Exams /></RequirePermission>} />
         <Route path="exams/new" element={<RequirePermission permission="exams"><ExamEditor /></RequirePermission>} />
         <Route path="exams/:id" element={<RequirePermission permission="exams"><ExamDetail /></RequirePermission>} />

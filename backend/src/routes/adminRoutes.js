@@ -8,6 +8,7 @@ import * as monitoring from '../controllers/monitoringController.js';
 import * as questions from '../controllers/questionController.js';
 import * as results from '../controllers/resultController.js';
 import * as students from '../controllers/studentAdminController.js';
+import * as universities from '../controllers/universityController.js';
 import { requireAdmin, requirePermission as can } from '../middleware/auth.js';
 import { loginLimiter } from '../middleware/rateLimiters.js';
 import { validate } from '../middleware/validate.js';
@@ -65,6 +66,11 @@ router.get('/students', can('students'), validate({ query: v.studentListSchema }
 router.get('/students/:id', can('students'), id, h(students.getStudent));
 router.put('/students/:id', can('students'), id, validate({ body: v.studentUpdateSchema }), h(students.updateStudent));
 router.delete('/students/:id', can('students'), id, h(students.deleteStudent));
+
+router.get('/universities', can('students'), h(universities.listUniversities));
+router.post('/universities', can('students'), validate({ body: v.universitySchema }), h(universities.createUniversity));
+router.put('/universities/:id', can('students'), id, validate({ body: v.universityUpdateSchema }), h(universities.updateUniversity));
+router.delete('/universities/:id', can('students'), id, h(universities.deleteUniversity));
 
 router.get('/monitoring', can('monitoring'), h(monitoring.liveMonitoring));
 router.get('/attempts/:id', can('monitoring', 'results'), id, h(monitoring.attemptDetail));

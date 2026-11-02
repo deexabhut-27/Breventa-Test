@@ -11,7 +11,9 @@ export const attemptQuestionsCache = new TtlCache({ ttlMs: 15 * 60_000, max: 20_
 export const questionPoolCache = new TtlCache({ ttlMs: 30_000, max: 200 });
 // Correct answers per question, used when marking (never sent to students).
 export const answerKeyCache = new TtlCache({ ttlMs: 5 * 60_000, max: 20_000 });
+// Active university names shown on the registration form.
+export const universityCache = new TtlCache({ ttlMs: 30_000, max: 1 });
 
 export function clearAllCaches() {
-  [adminCache, studentCache, examCache, questionTextCache, attemptQuestionsCache, questionPoolCache, answerKeyCache].forEach((c) => c.clear());
+  [adminCache, studentCache, examCache, questionTextCache, attemptQuestionsCache, questionPoolCache, answerKeyCache, universityCache].forEach((c) => c.clear());
 }

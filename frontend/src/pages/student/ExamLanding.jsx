@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import CompanyIntro from '../../components/CompanyIntro.jsx';
 import StepIndicator from '../../components/StepIndicator.jsx';
-import { Button, Card, Field, Input, Spinner } from '../../components/ui.jsx';
+import { Button, Card, Field, Input, Select, Spinner } from '../../components/ui.jsx';
 import { errorCode, errorMessage, publicApi, studentApi, studentStore } from '../../lib/api.js';
 import StudentShell from './StudentShell.jsx';
 
@@ -13,7 +13,7 @@ function validate(f) {
   const e = {};
   if (f.fullName.trim().length < 2) e.fullName = 'Enter your full name';
   else if (!/^[\p{L}][\p{L}\s.'-]*$/u.test(f.fullName.trim())) e.fullName = 'Use letters, spaces, dots, apostrophes and hyphens only';
-  if (f.universityName.trim().length < 2) e.universityName = 'Enter your university name';
+  if (f.universityName.trim().length < 2) e.universityName = 'Select your university';
   if (!/^\+?[0-9]{10,15}$/.test(f.phone.replace(/[\s\-().]/g, ''))) e.phone = 'Enter a valid phone number (10–15 digits)';
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email.trim())) e.email = 'Enter a valid email address';
   if (f.enrollmentNumber && !/^[A-Za-z0-9/_-]+$/.test(f.enrollmentNumber.trim())) e.enrollmentNumber = 'Use letters, digits, /, _ and - only';
@@ -37,6 +37,14 @@ export default function ExamLanding() {
   const [errors, setErrors] = useState({});
   const [submitError, setSubmitError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [universities, setUniversities] = useState(null); // empty list = free-text field
+
+  useEffect(() => {
+    publicApi
+      .get('/public/universities')
+      .then((res) => setUniversities(res.data.data))
+      .catch(() => setUniversities([]));
+  }, []);
 
   useEffect(() => {
     publicApi
@@ -142,7 +150,22 @@ export default function ExamLanding() {
                   <Input autoComplete="name" value={form.fullName} onChange={(e) => set('fullName', e.target.value)} invalid={!!errors.fullName} />
                 </Field>
                 <Field label="University name" required error={errors.universityName}>
-                  <Input autoComplete="organization" value={form.universityName} onChange={(e) => set('universityName', e.target.value)} invalid={!!errors.universityName} />
+                  {universities?.length ? (
+                    <Select
+                      value={form.universityName}
+                      onChange={(e) => set('universityName', e.target.value)}
+                      className={errors.universityName ? '[&_select]:border-red-400' : ''}
+                    >
+                      <option value="">Select your university</option>
+                      {universities.map((u) => (
+                        <option key={u} value={u}>
+                          {u}
+                        </option>
+                      ))}
+                    </Select>
+                  ) : (
+                    <Input autoComplete="organization" value={form.universityName} onChange={(e) => set('universityName', e.target.value)} invalid={!!errors.universityName} />
+                  )}
                 </Field>
               </>
             )}

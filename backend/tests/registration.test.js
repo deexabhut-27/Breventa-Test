@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { Student } from '../src/models/index.js';
+import { Student, University } from '../src/models/index.js';
 import { api, clearDb, createExam, seedQuestions, setupDb, studentData, teardownDb } from './helpers.js';
 
 beforeAll(setupDb);
@@ -36,6 +36,16 @@ describe('student registration', () => {
     expect((await register(studentData({ fullName: '' }))).status).toBe(400);
     expect((await register(studentData({ universityName: '' }))).status).toBe(400);
     expect((await register(studentData({ enrollmentNumber: '' }))).status).toBe(201); // optional
+  });
+
+  it('requires a university from the admin list once one exists', async () => {
+    await University.create({ name: 'Gujarat University' });
+    expect((await register(studentData({ universityName: 'Some Other College' }))).status).toBe(400);
+    const res = await register(studentData({ universityName: 'gujarat university' }));
+    expect(res.status).toBe(201);
+    expect((await Student.findOne()).universityName).toBe('Gujarat University');
+    const list = await api().get('/api/public/universities');
+    expect(list.body.data).toEqual(['Gujarat University']);
   });
 
   it('prevents duplicate registrations by email, phone or enrollment number', async () => {

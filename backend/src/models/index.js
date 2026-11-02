@@ -6,3 +6,4 @@ export { Attempt } from './Attempt.js';
 export { StudentResponse } from './StudentResponse.js';
 export { Result } from './Result.js';
 export { CandidateNote } from './CandidateNote.js';
+export { University } from './University.js';

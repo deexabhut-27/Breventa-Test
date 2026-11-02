@@ -1,5 +1,6 @@
 import { Examination, Student } from '../models/index.js';
 import { EXAM_STATUS } from '../config/constants.js';
+import { activeUniversityNames } from './universityController.js';
 import { publicExamView } from '../services/examService.js';
 import { signStudentToken } from '../services/tokenService.js';
 import { studentCache } from '../services/cache.js';
@@ -45,7 +46,16 @@ export async function getPublicExam(req, res) {
 export async function register(req, res) {
   const exam = await findPublicExam(req.params.slug);
   assertRegistrationOpen(exam);
-  const { fullName, universityName, phone, email, enrollmentNumber } = req.body;
+  const { fullName, phone, email, enrollmentNumber } = req.body;
+  let { universityName } = req.body;
+
+  // Once admins have added universities, students must pick one from that list.
+  const allowed = await activeUniversityNames();
+  if (allowed.length) {
+    const match = allowed.find((n) => n.toLowerCase() === universityName.trim().toLowerCase());
+    if (!match) throw AppError.badRequest('Select your university from the list', 'INVALID_UNIVERSITY');
+    universityName = match;
+  }
 
   // One write: the unique indexes (exam + email / phone / enrollment) reject duplicates,
   // and the error says which field clashed. No separate lookup first.

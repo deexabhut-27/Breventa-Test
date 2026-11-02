@@ -123,6 +123,12 @@ export const registrationSchema = z.object({
 
 export const studentUpdateSchema = registrationSchema;
 
+export const universitySchema = z.object({
+  name: z.string().trim().min(2, 'University name is required').max(200).transform((v) => v.replace(/\s+/g, ' ')),
+  isActive: z.boolean().optional(),
+});
+export const universityUpdateSchema = universitySchema.partial();
+
 export const studentLoginSchema = z.object({ email, phone });
 
 export const studentListSchema = z.object({

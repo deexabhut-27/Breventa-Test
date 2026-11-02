@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { continueRegistration, getPublicExam, listOpenExams, register } from '../controllers/publicController.js';
+import { publicList as listUniversities } from '../controllers/universityController.js';
 import { registrationLimiter } from '../middleware/rateLimiters.js';
 import { validate } from '../middleware/validate.js';
 import { asyncHandler as h } from '../utils/asyncHandler.js';
@@ -10,6 +11,7 @@ const slug = validate({ params: z.object({ slug: z.string().trim().min(3).max(80
 const router = Router();
 
 router.get('/exams', h(listOpenExams));
+router.get('/universities', h(listUniversities));
 router.get('/exams/:slug', slug, h(getPublicExam));
 router.post('/exams/:slug/register', registrationLimiter, slug, validate({ body: registrationSchema }), h(register));
 router.post('/exams/:slug/continue', registrationLimiter, slug, validate({ body: studentLoginSchema }), h(continueRegistration));
