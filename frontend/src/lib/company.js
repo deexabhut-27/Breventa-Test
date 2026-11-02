@@ -8,11 +8,6 @@ export const COMPANY = {
     'A Rajkot-based technology studio combining technology, strategy and creative design to build digital products that move business goals forward — with 100% in-house teams.',
   logo: '/breventa-logo.png',
   mark: '/breventa-mark.png',
-  stats: [
-    { value: '3+', label: 'Years of experience' },
-    { value: '200+', label: 'Projects delivered' },
-    { value: '50+', label: 'Happy clients' },
-  ],
   services: [
     'Website Development',
     'E-commerce Development',

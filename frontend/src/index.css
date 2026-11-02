@@ -45,3 +45,13 @@ body {
 .rich strong, .rich b { font-weight: 600; }
 .rich a { color: var(--color-brand-600); text-decoration: underline; }
 .rich blockquote { border-left: 3px solid var(--color-slate-300); padding-left: 0.75rem; color: var(--color-slate-600); }
+
+/* Subtle grid texture for the company intro hero, fading out toward the bottom. */
+.intro-grid {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.12) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.12) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: radial-gradient(ellipse at 70% 0%, #000 30%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse at 70% 0%, #000 30%, transparent 75%);
+}
