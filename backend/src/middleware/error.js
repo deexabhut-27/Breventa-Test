@@ -3,9 +3,29 @@ import { AppError } from '../utils/AppError.js';
 import { logger } from '../utils/logger.js';
 import { isDbReady } from '../config/db.js';
 
-export function requireDb(_req, _res, next) {
-  if (!isDbReady()) return next(new AppError(503, 'Database temporarily unavailable, please retry shortly', 'DB_UNAVAILABLE'));
-  return next();
+const DB_WAIT_MS = 8000;
+
+/** Resolves true once MongoDB is connected, or false after `ms`. Short drops (network blips, Atlas failover) are waited out. */
+function waitForDb(ms) {
+  if (isDbReady()) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const conn = mongoose.connection;
+    const done = (ok) => {
+      clearTimeout(timer);
+      conn.off('connected', onUp);
+      conn.off('reconnected', onUp);
+      resolve(ok);
+    };
+    const onUp = () => done(true);
+    const timer = setTimeout(() => done(isDbReady()), ms);
+    conn.on('connected', onUp);
+    conn.on('reconnected', onUp);
+  });
+}
+
+export async function requireDb(_req, _res, next) {
+  if (isDbReady() || (await waitForDb(DB_WAIT_MS))) return next();
+  return next(new AppError(503, 'Database temporarily unavailable, please retry shortly', 'DB_UNAVAILABLE'));
 }
 
 export function notFound(req, _res, next) {

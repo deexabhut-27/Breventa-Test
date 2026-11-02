@@ -3,7 +3,29 @@ import axios from 'axios';
 const baseURL = `${import.meta.env.VITE_API_URL || ''}/api`;
 export const ADMIN_TOKEN_KEY = 'pes.adminToken';
 
-export const adminApi = axios.create({ baseURL, timeout: 30000 });
+// Brief outages (database reconnecting, API restarting behind a proxy) are retried quietly
+// instead of being shown to the user. Real errors (4xx, 500 with a JSON error) are not retried.
+const RETRY_DELAYS = [800, 1600, 3200];
+function isTransient(err) {
+  const res = err?.response;
+  if (!res) return false; // network errors / timeouts are handled by callers that know whether a resend is safe
+  if (res.data?.error?.code === 'DB_UNAVAILABLE') return true;
+  if ([502, 503, 504].includes(res.status)) return true;
+  return res.status >= 500 && !res.data?.error; // proxy error page while the API restarts
+}
+function withRetry(instance) {
+  instance.interceptors.response.use(undefined, async (err) => {
+    const config = err?.config;
+    if (!config || !isTransient(err)) return Promise.reject(err);
+    config.retryCount = (config.retryCount || 0) + 1;
+    if (config.retryCount > RETRY_DELAYS.length) return Promise.reject(err);
+    await new Promise((r) => setTimeout(r, RETRY_DELAYS[config.retryCount - 1]));
+    return instance(config);
+  });
+  return instance;
+}
+
+export const adminApi = withRetry(axios.create({ baseURL, timeout: 30000 }));
 adminApi.interceptors.request.use((config) => {
   const token = localStorage.getItem(ADMIN_TOKEN_KEY);
   if (token) config.headers.Authorization = `Bearer ${token}`;
@@ -22,7 +44,7 @@ adminApi.interceptors.response.use(
   },
 );
 
-export const publicApi = axios.create({ baseURL, timeout: 20000 });
+export const publicApi = withRetry(axios.create({ baseURL, timeout: 20000 }));
 
 // ---------- Student storage (per examination slug) ----------
 export const studentStore = {
@@ -46,7 +68,7 @@ export const studentStore = {
 };
 
 export function studentApi(slug) {
-  const instance = axios.create({ baseURL, timeout: 15000 });
+  const instance = withRetry(axios.create({ baseURL, timeout: 15000 }));
   instance.interceptors.request.use((config) => {
     const token = studentStore.token(slug);
     const session = studentStore.session(slug);
