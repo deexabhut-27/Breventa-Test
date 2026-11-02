@@ -82,8 +82,8 @@ export default function Instructions() {
       ShieldAlert,
       'Tab switching',
       strict
-        ? 'STRICT MODE: switching tabs, minimising the browser, or opening another app terminates your examination immediately. A terminated examination cannot be restarted.'
-        : `WARNING MODE: you will receive ${exam.violationPolicy.maxViolations - 1} warning(s). The next tab switch, minimise or app switch terminates your examination. A terminated examination cannot be restarted.`,
+        ? 'STRICT MODE: every time you leave this page (switch tabs, minimise or open another app) it is recorded. If you stay away for 10 minutes, your examination is terminated. A terminated examination cannot be restarted.'
+        : `WARNING MODE: every time you leave this page it is recorded. Staying away for 10 minutes counts as a violation; you will receive ${exam.violationPolicy.maxViolations - 1} warning(s), and the next one terminates your examination. A terminated examination cannot be restarted.`,
     ],
     [ShieldAlert, 'Screenshots & copying', 'Taking a screenshot, screen capture or printing the page terminates your examination immediately. Copying question content is not allowed: the first attempt gives a warning, the next one terminates your examination.'],
     [Wifi, 'Connection', exam.violationPolicy.disconnectAction === 'TERMINATE' ? `Answers are saved automatically. If no connection is detected for ${Math.round(exam.violationPolicy.maxDisconnectSeconds / 60)} minute(s), your examination is terminated.` : 'Answers are saved automatically. Short network interruptions are tolerated; unsaved answers are kept on this device and sent when the connection returns.'],

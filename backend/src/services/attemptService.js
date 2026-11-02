@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Attempt, Question, StudentResponse } from '../models/index.js';
-import { ATTEMPT_STATUS, COPY_VIOLATIONS, COPY_WARNINGS_ALLOWED, COUNTED_VIOLATIONS, INSTANT_TERMINATION_VIOLATIONS } from '../config/constants.js';
+import { ATTEMPT_STATUS, AWAY_COUNT_SECONDS, AWAY_VIOLATIONS, COPY_VIOLATIONS, COPY_WARNINGS_ALLOWED, COUNTED_VIOLATIONS, INSTANT_TERMINATION_VIOLATIONS } from '../config/constants.js';
 import { env } from '../config/env.js';
 import { AppError } from '../utils/AppError.js';
 import { isDuplicateKeyError } from '../utils/helpers.js';
@@ -22,6 +22,7 @@ export const VIOLATION_LABELS = {
   NAVIGATION_BLOCKED: 'Back navigation blocked',
   HEARTBEAT_LOST: 'Connection heartbeat lost',
   RECONNECTED: 'Connection restored',
+  RETURNED_TO_EXAM: 'Returned to the examination page',
   SESSION_REPLACED: 'Examination opened in a new session',
   FULLSCREEN_EXIT: 'Exited full screen',
   COPY_ATTEMPT: 'Copied question content',
@@ -83,31 +84,39 @@ async function resumeAttempt(attemptId, { ip, userAgent }) {
   return { attempt, sessionId, resumed: true };
 }
 
+// A terminated attempt blocks further starts unless an administrator allowed a retake.
+const blocksRetake = (a) => a.status === ATTEMPT_STATUS.TERMINATED && !a.retakeAllowedAt;
+// Attempts that count toward exam.maxAttempts (retaken terminated attempts do not).
+const countedAttempts = (attempts) => attempts.filter((a) => !a.retakeAllowedAt).length;
+
 /** Summary of a student's attempts for the instructions page. */
 export async function attemptSummary(student, exam) {
   const attempts = await Attempt.find({ student: student._id, examination: exam._id })
-    .select('status attemptNumber expiresAt terminationReason')
+    .select('status attemptNumber expiresAt terminationReason retakeAllowedAt')
     .lean();
   const active = attempts.find((a) => a.status === ATTEMPT_STATUS.IN_PROGRESS && !isExpired(a));
-  const terminated = attempts.find((a) => a.status === ATTEMPT_STATUS.TERMINATED);
+  const terminated = attempts.find(blocksRetake);
+  const latest = attempts.reduce((a, b) => (!a || b.attemptNumber > a.attemptNumber ? b : a), null);
 
   let canStart = true;
   let blockedReason = null;
   if (terminated) {
     canStart = false;
     blockedReason = `Your examination was terminated: ${terminated.terminationReason || 'policy violation'}`;
-  } else if (!active && attempts.length >= exam.maxAttempts) {
+  } else if (!active && countedAttempts(attempts) >= exam.maxAttempts) {
     canStart = false;
     blockedReason = 'You have already completed this examination.';
   }
   return {
     hasActiveAttempt: !!active,
-    attemptsUsed: attempts.length,
+    attemptsUsed: countedAttempts(attempts),
     maxAttempts: exam.maxAttempts,
     terminated: !!terminated,
     completedCount: attempts.filter((a) => a.status === ATTEMPT_STATUS.COMPLETED).length,
     canStart,
     blockedReason,
+    // An administrator reactivated a terminated attempt and the student has not started again yet.
+    retakeAllowed: canStart && !!latest?.retakeAllowedAt,
   };
 }
 
@@ -115,17 +124,17 @@ export async function startAttempt({ student, exam, ip, userAgent }) {
   const now = new Date();
   assertExamOpen(exam, now);
 
-  let attempts = await Attempt.find({ student: student._id, examination: exam._id }).select('status expiresAt attemptNumber');
+  let attempts = await Attempt.find({ student: student._id, examination: exam._id }).select('status expiresAt attemptNumber retakeAllowedAt');
   const active = attempts.find((a) => a.status === ATTEMPT_STATUS.IN_PROGRESS);
   if (active) {
     if (!isExpired(active)) return resumeAttempt(active._id, { ip, userAgent });
     await finalizeAttempt(active._id, { status: ATTEMPT_STATUS.COMPLETED, submissionType: 'AUTO_TIMEOUT' });
-    attempts = await Attempt.find({ student: student._id, examination: exam._id }).select('status attemptNumber');
+    attempts = await Attempt.find({ student: student._id, examination: exam._id }).select('status attemptNumber retakeAllowedAt');
   }
-  if (attempts.some((a) => a.status === ATTEMPT_STATUS.TERMINATED)) {
+  if (attempts.some(blocksRetake)) {
     throw AppError.forbidden('Your examination attempt was terminated and cannot be restarted', 'ATTEMPT_TERMINATED');
   }
-  if (attempts.length >= exam.maxAttempts) {
+  if (countedAttempts(attempts) >= exam.maxAttempts) {
     throw AppError.forbidden('You have already used all permitted attempts for this examination', 'ATTEMPTS_EXHAUSTED');
   }
 
@@ -306,8 +315,13 @@ export async function savePendingResponses(attempt, pending = []) {
   return results;
 }
 
-export async function recordHeartbeat(attempt) {
+export async function recordHeartbeat(attempt, { visible } = {}) {
   const now = new Date();
+  // A visible page means the student is back, even if the "returned" report was lost.
+  if (visible === true && attempt.awaySince) {
+    const summary = await endAway(attempt, { since: attempt.awaySince, key: attempt.awayEventId, now, source: 'SERVER' });
+    if (summary.terminated) return { status: summary.status, serverNow: now.toISOString(), remainingMs: 0, terminated: true };
+  }
   const update = { $set: { lastHeartbeatAt: now, connectionState: 'ONLINE' } };
   if (attempt.connectionState === 'DISCONNECTED') {
     const gap = attempt.lastHeartbeatAt ? Math.round((now - attempt.lastHeartbeatAt) / 1000) : null;
@@ -332,13 +346,70 @@ function violationSummary(attempt, extra = {}) {
   };
 }
 
+const fmtAway = (seconds) => (seconds >= 60 ? `${Math.round(seconds / 60)} minute(s)` : `${Math.round(seconds)} second(s)`);
+
 /**
- * Records a monitoring event. Counted violations (tab switch, hidden window, navigation)
- * terminate the attempt once policy.maxViolations is reached. Screen capture terminates
- * immediately; copying terminates after COPY_WARNINGS_ALLOWED warnings. Duplicate eventIds are ignored.
+ * Records a monitoring event. Leaving the page is only logged; it counts as a violation once the
+ * student has been away for AWAY_COUNT_SECONDS (see recordAway). Counted violations terminate the
+ * attempt once policy.maxViolations is reached. Screen capture terminates immediately; copying
+ * terminates after COPY_WARNINGS_ALLOWED warnings. Duplicate eventIds are ignored.
  */
-export async function recordViolation(attemptId, { type, reason, eventId, clientAt, source = 'CLIENT' }) {
-  const counted = COUNTED_VIOLATIONS.includes(type);
+export async function recordViolation(attemptId, { type, reason, eventId, clientAt, source = 'CLIENT', returned = false }) {
+  if (AWAY_VIOLATIONS.includes(type)) return recordAway(attemptId, { type, reason, eventId, clientAt, source, returned });
+  return applyViolation(attemptId, { type, reason, eventId, clientAt, source });
+}
+
+/** Page hidden: log it and start the away clock. Page visible again: stop the clock and count it if it ran too long. */
+async function recordAway(attemptId, { type, reason, eventId, clientAt, source, returned }) {
+  const now = new Date();
+  const summary = await applyViolation(attemptId, { type, reason, eventId, clientAt, source, counted: false });
+  if (summary.status !== ATTEMPT_STATUS.IN_PROGRESS) return summary;
+
+  if (!returned) {
+    await Attempt.updateOne(
+      { _id: attemptId, status: ATTEMPT_STATUS.IN_PROGRESS, awaySince: null },
+      { $set: { awaySince: now, awayEventId: eventId || randomUUID() } },
+    );
+    return { ...summary, counted: false, away: true };
+  }
+  const attempt = await Attempt.findById(attemptId).select('awaySince awayEventId startedAt');
+  // If the "page hidden" beacon never arrived, fall back to the browser's hide time (never before the start).
+  let since = attempt.awaySince;
+  if (!since && clientAt) since = new Date(Math.min(now.getTime(), Math.max(new Date(clientAt).getTime(), attempt.startedAt.getTime())));
+  if (!since) return { ...summary, counted: false };
+  return endAway(attempt, { since, key: attempt.awayEventId || eventId, now, source });
+}
+
+/** The student is back on the page. Counts one violation if they were away for AWAY_COUNT_SECONDS or more. */
+async function endAway(attempt, { since, key, now, source }) {
+  const seconds = (now - since) / 1000;
+  const cleared = await Attempt.updateOne(
+    { _id: attempt._id, status: ATTEMPT_STATUS.IN_PROGRESS, ...(attempt.awaySince ? { awaySince: attempt.awaySince } : {}) },
+    {
+      $unset: { awaySince: 1, awayEventId: 1 },
+      $push: { violations: { type: 'RETURNED_TO_EXAM', reason: `Returned after ${fmtAway(seconds)} away`, source: 'SERVER', at: now } },
+    },
+  );
+  if (seconds >= AWAY_COUNT_SECONDS) {
+    const summary = await countAway(attempt._id, { key, seconds, source });
+    return { ...summary, counted: true };
+  }
+  const current = await Attempt.findById(attempt._id).select('violationCount copyCount policy status terminationReason');
+  return violationSummary(current, { counted: false, cleared: !!cleared.modifiedCount });
+}
+
+/** One counted violation per away period (the monitor and the return report share the same eventId). */
+export function countAway(attemptId, { key, seconds, source = 'SERVER' }) {
+  return applyViolation(attemptId, {
+    type: 'TAB_SWITCH',
+    counted: true,
+    eventId: `away:${key}`,
+    reason: `Away from the examination page for ${fmtAway(seconds)}`,
+    source,
+  });
+}
+
+async function applyViolation(attemptId, { type, reason, eventId, clientAt, source = 'CLIENT', counted = COUNTED_VIOLATIONS.includes(type) }) {
   const isCopy = COPY_VIOLATIONS.includes(type);
   const instant = INSTANT_TERMINATION_VIOLATIONS.includes(type);
   const inc = { ...(counted ? { violationCount: 1 } : {}), ...(isCopy ? { copyCount: 1 } : {}) };
@@ -373,7 +444,7 @@ export async function recordViolation(attemptId, { type, reason, eventId, client
   }
 
   if (counted && updated.violationCount >= updated.policy.maxViolations) {
-    const reasonText = `${VIOLATION_LABELS[type]} (violation ${updated.violationCount} of ${updated.policy.maxViolations} allowed)`;
+    const reasonText = `${entry.reason} (violation ${updated.violationCount} of ${updated.policy.maxViolations} allowed)`;
     const { attempt } = await finalizeAttempt(updated._id, {
       status: ATTEMPT_STATUS.TERMINATED,
       submissionType: 'TERMINATED',

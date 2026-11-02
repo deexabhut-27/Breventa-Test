@@ -31,7 +31,7 @@ beforeEach(async () => {
   const beta = await startExam(exam, { fullName: 'Beta Student', universityName: 'Uni A' });
   await api().post('/api/student/attempt/submit').set(beta.headers).send({});
   const gamma = await startExam(exam, { fullName: 'Gamma Student', universityName: 'Uni B' });
-  await api().post('/api/student/attempt/violations').set(gamma.headers).send({ type: 'TAB_SWITCH' });
+  await api().post('/api/student/attempt/violations').set(gamma.headers).send({ type: 'SCREENSHOT_ATTEMPT' });
 });
 
 describe('results management', () => {

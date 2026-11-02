@@ -50,7 +50,7 @@ describe('selection pipeline', () => {
       const c = await correctDisplayedOption(term.payload.attemptId, i);
       await api().put(`/api/student/attempt/responses/${i}`).set(term.headers).send({ selectedOption: c, seq: i + 1 });
     }
-    await api().post('/api/student/attempt/violations').set(term.headers).send({ type: 'TAB_SWITCH' });
+    await api().post('/api/student/attempt/violations').set(term.headers).send({ type: 'SCREENSHOT_ATTEMPT' });
 
     const preview = await api().post('/api/admin/candidates/shortlist/preview').set(sa.auth).send({ exam: String(exam._id), minPercentage: 40 });
     expect(preview.body.data.count).toBe(2);
@@ -248,7 +248,7 @@ describe('pass mark and automatic Round 2', () => {
 
   it('keeps terminated attempts as not passed whatever the pass mark', async () => {
     const s = await startExam(passExam);
-    await api().post('/api/student/attempt/violations').set(s.headers).send({ type: 'TAB_SWITCH' });
+    await api().post('/api/student/attempt/violations').set(s.headers).send({ type: 'SCREENSHOT_ATTEMPT' });
     await api().put(`/api/admin/exams/${passExam._id}`).set(sa.auth).send(examBody(0));
     const r = await api().get(`/api/admin/results?exam=${passExam._id}`).set(sa.auth);
     expect(r.body.data[0]).toMatchObject({ status: 'TERMINATED', passed: false });

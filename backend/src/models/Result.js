@@ -28,6 +28,8 @@ const resultSchema = new mongoose.Schema(
     status: { type: String, enum: [ATTEMPT_STATUS.COMPLETED, ATTEMPT_STATUS.TERMINATED], required: true },
     submissionType: { type: String, enum: SUBMISSION_TYPES },
     terminationReason: String,
+    // Copied from the attempt: an administrator allowed the student to retake the examination.
+    retakeAllowedAt: Date,
     startedAt: Date,
     endedAt: Date,
     durationUsedSeconds: Number,

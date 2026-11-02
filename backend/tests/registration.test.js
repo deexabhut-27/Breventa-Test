@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { Student, University } from '../src/models/index.js';
-import { api, clearDb, createExam, seedQuestions, setupDb, studentData, teardownDb } from './helpers.js';
+import { api, clearDb, createExam, seedQuestions, setupDb, startExam, studentData, teardownDb } from './helpers.js';
 
 beforeAll(setupDb);
 afterAll(teardownDb);
@@ -59,6 +59,17 @@ describe('student registration', () => {
     expect(await Student.countDocuments()).toBe(1);
   });
 
+  it('logs a returning student in when the same email and phone are submitted again', async () => {
+    const first = studentData();
+    const created = await register(first);
+    for (let i = 0; i < 2; i += 1) {
+      const again = await register({ ...first, fullName: 'Different Name' });
+      expect(again.status).toBe(200);
+      expect(again.body.data).toMatchObject({ existing: true, student: { id: created.body.data.student.id, fullName: first.fullName } });
+    }
+    expect(await Student.countDocuments()).toBe(1);
+  });
+
   it('allows the same student on a different examination', async () => {
     const data = studentData();
     await register(data);
@@ -78,8 +89,23 @@ describe('student registration', () => {
     await register(data);
     const ok = await api().post(`/api/public/exams/${exam.slug}/continue`).send({ email: data.email, phone: data.phone });
     expect(ok.status).toBe(200);
-    const bad = await api().post(`/api/public/exams/${exam.slug}/continue`).send({ email: data.email, phone: '9999999999' });
-    expect(bad.status).toBe(404);
+    // Logging in again works any number of times.
+    expect((await api().post(`/api/public/exams/${exam.slug}/continue`).send({ email: data.email, phone: data.phone })).status).toBe(200);
+    const mismatch = await api().post(`/api/public/exams/${exam.slug}/continue`).send({ email: data.email, phone: '9999999999' });
+    expect(mismatch.status).toBe(409);
+    expect(mismatch.body.error.code).toBe('DETAILS_MISMATCH');
+    const unknown = await api().post(`/api/public/exams/${exam.slug}/continue`).send({ email: 'nobody@test.edu', phone: '9999999999' });
+    expect(unknown.status).toBe(404);
+  });
+
+  it('lets a student log back in after a terminated attempt', async () => {
+    const s = await startExam(exam);
+    await api().post('/api/student/attempt/violations').set(s.headers).send({ type: 'SCREENSHOT_ATTEMPT' });
+    const student = await Student.findById(s.student.id);
+    const again = await api().post(`/api/public/exams/${exam.slug}/continue`).send({ email: student.email, phone: student.phone });
+    expect(again.status).toBe(200);
+    const me = await api().get('/api/student/me').set({ Authorization: `Bearer ${again.body.data.token}` });
+    expect(me.body.data.attempts).toMatchObject({ terminated: true, canStart: false });
   });
 
   it('rejects registration for draft or closed examinations', async () => {

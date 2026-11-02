@@ -155,7 +155,8 @@ export default function ExamRoom() {
     if (phase !== 'active' || !data) return undefined;
     const beat = async () => {
       try {
-        const res = await api.post('/student/attempt/heartbeat', {});
+        const res = await api.post('/student/attempt/heartbeat', { visible: document.visibilityState === 'visible' });
+        if (res.data.data.terminated) return finish();
         syncTo(res.data.data.remainingMs);
         setOnline(true);
       } catch (err) {
@@ -176,7 +177,7 @@ export default function ExamRoom() {
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);
     };
-  }, [phase, data, api, syncTo, handleApiError]);
+  }, [phase, data, api, syncTo, handleApiError, finish]);
 
   // ---------- Submission ----------
   const submit = useCallback(
@@ -225,7 +226,7 @@ export default function ExamRoom() {
         const result = res.data.data;
         if (result.terminated) finish();
         else if (event.type === 'COPY_ATTEMPT') setCopyWarning(result);
-        else if (COUNTED.includes(event.type)) setWarning(result);
+        else if (COUNTED.includes(event.type) && result.counted) setWarning(result);
       } catch (err) {
         if (handleApiError(err)) return;
         if (isNetworkError(err) && attempt < 5) setTimeout(() => report(event, attempt + 1), 2000 * (attempt + 1));
@@ -513,10 +514,10 @@ export default function ExamRoom() {
           <div className="flex gap-3 text-sm text-slate-700">
             <AlertTriangle className="h-6 w-6 shrink-0 text-red-500" />
             <p>
-              Leaving the examination page was recorded ({warning.violationCount} of {warning.maxViolations - 1} warning{warning.maxViolations - 1 === 1 ? '' : 's'}).{' '}
+              You were away from the examination page for more than 10 minutes. This was recorded ({warning.violationCount} of {warning.maxViolations - 1} warning{warning.maxViolations - 1 === 1 ? '' : 's'}).{' '}
               <b>
                 {warning.remainingBeforeTermination <= 1
-                  ? 'If you leave the page again, your examination will be terminated.'
+                  ? 'If you stay away for 10 minutes again, your examination will be terminated.'
                   : `${warning.remainingBeforeTermination - 1} more warning(s) remain before termination.`}
               </b>
             </p>

@@ -1,9 +1,9 @@
 import { Attempt } from '../models/index.js';
-import { ATTEMPT_STATUS } from '../config/constants.js';
+import { ATTEMPT_STATUS, AWAY_COUNT_SECONDS } from '../config/constants.js';
 import { env } from '../config/env.js';
 import { isDbReady } from '../config/db.js';
 import { logger } from '../utils/logger.js';
-import { finalizeAttempt } from './attemptService.js';
+import { countAway, finalizeAttempt } from './attemptService.js';
 import { evaluateAttempt } from './evaluationService.js';
 
 /**
@@ -11,11 +11,12 @@ import { evaluateAttempt } from './evaluationService.js';
  *  1. Auto-submits attempts whose server-side timer has expired (browser closed, device off).
  *  2. Flags attempts whose heartbeat stopped; optionally terminates after a long, configurable gap.
  *     Short network blips only mark the attempt DISCONNECTED and are never treated as cheating.
- *  3. Re-runs evaluation for finalized attempts whose evaluation previously failed.
+ *  3. Counts a violation for students who have been away from the page for AWAY_COUNT_SECONDS.
+ *  4. Re-runs evaluation for finalized attempts whose evaluation previously failed.
  * Every transition is a conditional atomic update, so running several API instances is safe.
  */
 export async function runMonitorTick(now = new Date()) {
-  const summary = { expired: 0, disconnected: 0, terminated: 0, reevaluated: 0 };
+  const summary = { expired: 0, disconnected: 0, terminated: 0, away: 0, reevaluated: 0 };
   const graceMs = env.SUBMISSION_GRACE_SECONDS * 1000;
 
   const expired = await Attempt.find({
@@ -31,9 +32,16 @@ export async function runMonitorTick(now = new Date()) {
   }
 
   const running = await Attempt.find({ status: ATTEMPT_STATUS.IN_PROGRESS })
-    .select('lastHeartbeatAt connectionState policy')
+    .select('lastHeartbeatAt connectionState policy awaySince awayEventId')
     .lean();
   for (const a of running) {
+    const awayFor = a.awaySince ? (now - a.awaySince) / 1000 : 0;
+    if (awayFor >= AWAY_COUNT_SECONDS) {
+      // Deduplicated by eventId, so later ticks and the student's return do not count it again.
+      const res = await countAway(a._id, { key: a.awayEventId, seconds: awayFor });
+      if (!res.duplicate) summary.away += 1;
+      if (res.terminated) continue;
+    }
     const silentFor = (now - (a.lastHeartbeatAt || now)) / 1000;
     if (a.policy.disconnectAction === 'TERMINATE' && silentFor > a.policy.maxDisconnectSeconds) {
       const { finalized } = await finalizeAttempt(a._id, {

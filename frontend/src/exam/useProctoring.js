@@ -7,8 +7,9 @@ const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Ma
  * Browser-side monitoring. Browser signals are best-effort: the server's heartbeat
  * monitor and timer are the authority when the browser is closed or loses power.
  *
- *  - Hidden page (tab switch, minimise, app switch): reported immediately via sendBeacon,
- *    then confirmed by XHR when the page is visible again (same eventId, deduplicated server-side).
+ *  - Hidden page (tab switch, minimise, app switch): reported immediately via sendBeacon, which
+ *    starts the server's away clock; reported again by XHR when the page is visible (same eventId,
+ *    returned: true). Only an absence of AWAY_COUNT_SECONDS (10 minutes) counts as a violation.
  *  - Refresh / close: beforeunload shows a warning; pagehide sends an "unload" beacon that is
  *    logged but not counted (the heartbeat monitor covers closed browsers).
  *    If an unload is cancelled and the page stays hidden, it is reported as a violation.
@@ -69,7 +70,7 @@ export function useProctoring({ enabled, slug, token, sessionId, getPending, rep
       } else if (hiddenEvent) {
         const ev = hiddenEvent;
         hiddenEvent = null;
-        handlers.current.report({ type: 'TAB_SWITCH', eventId: ev.id, clientAt: ev.at, reason: 'Examination page hidden (tab switch, minimise or another app)' });
+        handlers.current.report({ type: 'TAB_SWITCH', eventId: ev.id, clientAt: ev.at, returned: true, reason: 'Examination page hidden (tab switch, minimise or another app)' });
       } else if (hiddenDuringUnload) {
         hiddenDuringUnload = false;
         handlers.current.report({ type: 'WINDOW_HIDDEN', eventId: uid(), reason: 'Examination page hidden after a cancelled reload/close' });

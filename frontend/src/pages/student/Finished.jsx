@@ -20,7 +20,7 @@ export default function Finished() {
     studentApi(slug)
       .get('/student/me')
       .then((res) => {
-        if (res.data.data.attempts.hasActiveAttempt) navigate(`/exam/${slug}/instructions`, { replace: true });
+        if (res.data.data.attempts.hasActiveAttempt || res.data.data.attempts.retakeAllowed) navigate(`/exam/${slug}/instructions`, { replace: true });
         else setData(res.data.data);
       })
       .catch((err) => setError(errorMessage(err)));

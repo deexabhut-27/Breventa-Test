@@ -63,7 +63,7 @@ export async function answer(req, res) {
 
 export async function heartbeat(req, res) {
   const attempt = await active(req);
-  res.json({ success: true, data: await recordHeartbeat(attempt) });
+  res.json({ success: true, data: await recordHeartbeat(attempt, { visible: req.body?.visible }) });
 }
 
 export async function violation(req, res) {

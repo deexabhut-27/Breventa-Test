@@ -33,6 +33,16 @@ export const studentStore = {
   session: (slug) => sessionStorage.getItem(`pes.exam.${slug}.session`),
   setSession: (slug, s) => sessionStorage.setItem(`pes.exam.${slug}.session`, s),
   clearSession: (slug) => sessionStorage.removeItem(`pes.exam.${slug}.session`),
+  /** Stores a login. When a different student logs in on this device, the previous student's unsent answers and session are dropped. */
+  login: (slug, token, studentId) => {
+    const key = `pes.exam.${slug}.student`;
+    if (localStorage.getItem(key) !== String(studentId)) {
+      ['pending', 'seq'].forEach((k) => localStorage.removeItem(`pes.exam.${slug}.${k}`));
+      ['session', 'current'].forEach((k) => sessionStorage.removeItem(`pes.exam.${slug}.${k}`));
+    }
+    localStorage.setItem(key, String(studentId));
+    localStorage.setItem(`pes.exam.${slug}.token`, token);
+  },
 };
 
 export function studentApi(slug) {

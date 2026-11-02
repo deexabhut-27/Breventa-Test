@@ -1,7 +1,7 @@
-import { ArrowDown, ArrowUp, BarChart3, FileDown, FileSpreadsheet, FileText, RotateCcw, Search, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, BarChart3, FileDown, FileSpreadsheet, FileText, RotateCcw, Search, Trash2, Undo2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Button, Card, ConfirmDialog, DataCard, EmptyState, KV, ResponsiveList, ErrorState, Field, Input, PageHeader, Pagination, ResultBadge, Select, Spinner, StatCard, StatusBadge, Table, Td, Th } from '../../components/ui.jsx';
+import { Badge, Button, Card, ConfirmDialog, DataCard, EmptyState, KV, ResponsiveList, ErrorState, Field, Input, PageHeader, Pagination, ResultBadge, Select, Spinner, StatCard, StatusBadge, Table, Td, Th } from '../../components/ui.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { adminApi, blobErrorMessage, downloadFile, errorMessage } from '../../lib/api.js';
 import { fmtDateTime, fmtDuration } from '../../lib/format.js';
@@ -16,6 +16,7 @@ export default function Results({ terminatedOnly = false }) {
   const [error, setError] = useState('');
   const [exporting, setExporting] = useState('');
   const [deleting, setDeleting] = useState(null);
+  const [retaking, setRetaking] = useState(null);
   const [busy, setBusy] = useState(false);
 
   const filters = useMemo(() => Object.fromEntries(FILTER_KEYS.map((k) => [k, params.get(k) || ''])), [params]);
@@ -258,8 +259,20 @@ export default function Results({ terminatedOnly = false }) {
                     <Td>
                       <StatusBadge status={r.status} />
                     </Td>
-                    {terminatedOnly && <Td className="max-w-xs text-xs text-red-700">{r.terminationReason}</Td>}
-                    <Td>
+                    {terminatedOnly && (
+                      <Td className="max-w-xs text-xs text-red-700">
+                        {r.terminationReason}
+                        {r.retakeAllowedAt && (
+                          <Badge color="green" className="mt-1">
+                            Retake allowed
+                          </Badge>
+                        )}
+                      </Td>
+                    )}
+                    <Td className="whitespace-nowrap">
+                      {r.status === 'TERMINATED' && !r.retakeAllowedAt && (
+                        <Button variant="ghost" size="sm" icon={Undo2} onClick={() => setRetaking(r)} aria-label="Allow retake" title="Allow retake" />
+                      )}
                       <Button variant="ghost" size="sm" icon={Trash2} className="text-red-600" onClick={() => setDeleting(r)} aria-label="Delete result" title="Delete result" />
                     </Td>
                   </tr>
@@ -285,6 +298,11 @@ export default function Results({ terminatedOnly = false }) {
                           View
                         </Button>
                       </Link>
+                      {r.status === 'TERMINATED' && !r.retakeAllowedAt && (
+                        <Button variant="ghost" size="sm" icon={Undo2} onClick={() => setRetaking(r)}>
+                          Allow retake
+                        </Button>
+                      )}
                       <Button variant="ghost" size="sm" icon={Trash2} className="text-red-600" onClick={() => setDeleting(r)}>
                         Delete
                       </Button>
@@ -319,6 +337,11 @@ export default function Results({ terminatedOnly = false }) {
                   {r.terminationReason && (
                     <KV label="Termination reason" full>
                       <span className="text-red-700">{r.terminationReason}</span>
+                      {r.retakeAllowedAt && (
+                        <Badge color="green" className="ml-2">
+                          Retake allowed
+                        </Badge>
+                      )}
                     </KV>
                   )}
                 </DataCard>
@@ -329,6 +352,28 @@ export default function Results({ terminatedOnly = false }) {
           </>
         )}
       </Card>
+      <ConfirmDialog
+        open={!!retaking}
+        title="Allow retake"
+        message={`Let ${retaking?.studentName} take “${retaking?.examTitle}” again? This terminated attempt stays in the records, and the student gets one fresh attempt using the same email and phone number. The examination must still be open.`}
+        confirmLabel="Allow retake"
+        variant="primary"
+        loading={busy}
+        onClose={() => setRetaking(null)}
+        onConfirm={async () => {
+          setBusy(true);
+          try {
+            await adminApi.post(`/admin/results/${retaking._id}/allow-retake`);
+            toast.success(`${retaking.studentName} can now take the examination again`);
+            setRetaking(null);
+            load();
+          } catch (err) {
+            toast.error(errorMessage(err));
+          } finally {
+            setBusy(false);
+          }
+        }}
+      />
       <ConfirmDialog
         open={!!deleting}
         title="Delete result permanently"

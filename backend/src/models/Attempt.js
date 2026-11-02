@@ -55,7 +55,14 @@ const attemptSchema = new mongoose.Schema(
     violationCount: { type: Number, default: 0 },
     // Copy attempts are tracked separately from the tab-switch policy (see COPY_WARNINGS_ALLOWED).
     copyCount: { type: Number, default: 0 },
+    // Set while the examination page is hidden; cleared when the student comes back.
+    awaySince: Date,
+    awayEventId: String,
     terminationReason: String,
+    // Set when an administrator lets the student retake a terminated attempt. The attempt stays
+    // as history but no longer blocks a new start or counts toward maxAttempts.
+    retakeAllowedAt: Date,
+    retakeAllowedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin' },
     evaluated: { type: Boolean, default: false },
     ipAddress: String,
     userAgent: String,

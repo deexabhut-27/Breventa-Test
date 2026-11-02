@@ -5,6 +5,7 @@ import { refreshLatestResults } from '../services/latestResultService.js';
 import { buildResultsWorkbook, sendWorkbook } from '../services/excelService.js';
 import { writeResultsReport, writeStudentReport } from '../services/pdfService.js';
 import { buildResultFilter, buildSort, describeFilters, summarize } from '../services/resultQuery.js';
+import { ATTEMPT_STATUS } from '../config/constants.js';
 import { AppError } from '../utils/AppError.js';
 import { pageMeta } from '../utils/helpers.js';
 
@@ -52,6 +53,22 @@ export async function deleteResult(req, res) {
   await Result.deleteOne({ _id: result._id });
   await refreshLatestResults({ studentIds: [result.student] });
   res.json({ success: true, data: { id: result._id, removed } });
+}
+
+/** Lets a student whose attempt was terminated take the examination again. The terminated attempt and its result stay as history. */
+export async function allowRetake(req, res) {
+  const result = await Result.findById(req.params.id).select('attempt status retakeAllowedAt');
+  if (!result) throw AppError.notFound('Result not found');
+  if (result.status !== ATTEMPT_STATUS.TERMINATED) throw AppError.badRequest('Only terminated attempts can be reactivated', 'NOT_TERMINATED');
+  const now = new Date();
+  const attempt = await Attempt.findOneAndUpdate(
+    { _id: result.attempt, status: ATTEMPT_STATUS.TERMINATED, retakeAllowedAt: { $exists: false } },
+    { $set: { retakeAllowedAt: now, retakeAllowedBy: req.admin._id } },
+    { new: true },
+  );
+  if (!attempt) throw AppError.conflict('A retake has already been allowed for this attempt', 'RETAKE_ALREADY_ALLOWED');
+  await Result.updateOne({ _id: result._id }, { $set: { retakeAllowedAt: now } });
+  res.json({ success: true, data: { id: result._id, retakeAllowedAt: now } });
 }
 
 export async function studentPdf(req, res) {

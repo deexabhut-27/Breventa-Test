@@ -4,7 +4,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import CompanyIntro from '../../components/CompanyIntro.jsx';
 import StepIndicator from '../../components/StepIndicator.jsx';
 import { Button, Card, Field, Input, Select, Spinner } from '../../components/ui.jsx';
-import { errorCode, errorMessage, publicApi, studentApi, studentStore } from '../../lib/api.js';
+import { errorMessage, publicApi, studentStore } from '../../lib/api.js';
 import StudentShell from './StudentShell.jsx';
 
 const EMPTY = { fullName: '', universityName: '', phone: '', email: '', enrollmentNumber: '' };
@@ -32,7 +32,6 @@ export default function ExamLanding() {
   };
   const [exam, setExam] = useState(null);
   const [loadError, setLoadError] = useState('');
-  const [mode, setMode] = useState('register');
   const [form, setForm] = useState(EMPTY);
   const [errors, setErrors] = useState({});
   const [submitError, setSubmitError] = useState('');
@@ -51,35 +50,27 @@ export default function ExamLanding() {
       .get(`/public/exams/${slug}`)
       .then((res) => setExam(res.data.data))
       .catch((err) => setLoadError(errorMessage(err, 'This examination link is invalid.')));
-    // Already registered on this device? Skip straight to the instructions.
-    if (studentStore.token(slug)) {
-      studentApi(slug)
-        .get('/student/me')
-        .then(() => navigate(`/exam/${slug}/instructions`, { replace: true }))
-        .catch(() => studentStore.clearToken(slug));
-    }
-  }, [slug, navigate]);
+  }, [slug]);
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const closed = !!exam && (exam.status !== 'PUBLISHED' || (exam.endAt && new Date(exam.endAt) < new Date()));
 
+  // One form for everyone: if the email + phone are already registered, the server logs the
+  // student in to that profile (any number of times, even after a terminated attempt).
   const submit = async (e) => {
     e.preventDefault();
     setSubmitError('');
-    const errs = mode === 'register' ? validate(form) : validate({ ...EMPTY, fullName: 'x x', universityName: 'xx', phone: form.phone, email: form.email });
+    const errs = validate(form);
     setErrors(errs);
     if (Object.keys(errs).length) return;
     setBusy(true);
     try {
-      const body =
-        mode === 'register'
-          ? { ...form, fullName: form.fullName.trim(), universityName: form.universityName.trim(), email: form.email.trim(), enrollmentNumber: form.enrollmentNumber.trim() }
-          : { email: form.email.trim(), phone: form.phone };
-      const res = await publicApi.post(`/public/exams/${slug}/${mode === 'register' ? 'register' : 'continue'}`, body);
-      studentStore.setToken(slug, res.data.data.token);
+      const body = { ...form, fullName: form.fullName.trim(), universityName: form.universityName.trim(), email: form.email.trim(), enrollmentNumber: form.enrollmentNumber.trim() };
+      const res = await publicApi.post(`/public/exams/${slug}/register`, body);
+      studentStore.login(slug, res.data.data.token, res.data.data.student.id);
       navigate(`/exam/${slug}/instructions`);
     } catch (err) {
       setSubmitError(errorMessage(err));
-      if (errorCode(err) === 'ALREADY_REGISTERED') setMode('continue');
     } finally {
       setBusy(false);
     }
@@ -92,22 +83,18 @@ export default function ExamLanding() {
       </StudentShell>
     );
   if (!exam) return <Spinner className="h-screen" />;
-  const closed = exam.status !== 'PUBLISHED' || (exam.endAt && new Date(exam.endAt) < new Date());
 
   if (!onForm) {
     return (
       <StudentShell title={exam.title} wide>
         <StepIndicator current={1} />
         <CompanyIntro />
-        {closed ? (
-          <Card className="mt-6 p-6 text-center text-slate-600">Registration for this examination is closed.</Card>
-        ) : (
-          <div className="mt-6 flex justify-end">
-            <Button size="lg" onClick={goToForm} className="w-full sm:w-auto">
-              Next <ArrowRight className="h-4 w-4" />
-            </Button>
-          </div>
-        )}
+        {closed && <Card className="mt-6 p-6 text-center text-slate-600">Registration for this examination is closed. Students who already registered can still log in.</Card>}
+        <div className="mt-6 flex justify-end">
+          <Button size="lg" onClick={goToForm} className="w-full sm:w-auto">
+            {closed ? 'Log in' : 'Next'} <ArrowRight className="h-4 w-4" />
+          </Button>
+        </div>
       </StudentShell>
     );
   }
@@ -118,75 +105,44 @@ export default function ExamLanding() {
       <button type="button" onClick={() => setParams({})} className="mb-4 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800">
         <ArrowLeft className="h-4 w-4" /> Back to company details
       </button>
-      {closed ? (
-        <Card className="p-6 text-center text-slate-600">Registration for this examination is closed.</Card>
-      ) : (
-        <Card className="p-5 sm:p-6">
-          <h1 className="text-lg font-semibold">Student details</h1>
-          <p className="mb-5 text-sm text-slate-500">Enter your details as they appear in your university records.</p>
-          <div className="mb-5 flex rounded-lg bg-slate-100 p-1 text-sm">
-            {[
-              ['register', 'New registration'],
-              ['continue', 'Already registered? Continue'],
-            ].map(([m, label]) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => {
-                  setMode(m);
-                  setErrors({});
-                  setSubmitError('');
-                }}
-                className={`flex-1 rounded-md px-2 py-2 text-xs font-medium sm:px-3 sm:text-sm ${mode === m ? 'bg-white shadow-sm' : 'text-slate-500'}`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <form onSubmit={submit} className="space-y-4" noValidate>
-            {mode === 'register' && (
-              <>
-                <Field label="Full name" required error={errors.fullName}>
-                  <Input autoComplete="name" value={form.fullName} onChange={(e) => set('fullName', e.target.value)} invalid={!!errors.fullName} />
-                </Field>
-                <Field label="University name" required error={errors.universityName}>
-                  {universities?.length ? (
-                    <Select
-                      value={form.universityName}
-                      onChange={(e) => set('universityName', e.target.value)}
-                      className={errors.universityName ? '[&_select]:border-red-400' : ''}
-                    >
-                      <option value="">Select your university</option>
-                      {universities.map((u) => (
-                        <option key={u} value={u}>
-                          {u}
-                        </option>
-                      ))}
-                    </Select>
-                  ) : (
-                    <Input autoComplete="organization" value={form.universityName} onChange={(e) => set('universityName', e.target.value)} invalid={!!errors.universityName} />
-                  )}
-                </Field>
-              </>
+      <Card className="p-5 sm:p-6">
+        <h1 className="text-lg font-semibold">Student details</h1>
+        <p className="mb-5 text-sm text-slate-500">
+          Enter your details as they appear in your university records. Registered before? Enter the same email address and phone number to continue with your profile.
+        </p>
+        <form onSubmit={submit} className="space-y-4" noValidate>
+          <Field label="Full name" required error={errors.fullName}>
+            <Input autoComplete="name" value={form.fullName} onChange={(e) => set('fullName', e.target.value)} invalid={!!errors.fullName} />
+          </Field>
+          <Field label="University name" required error={errors.universityName}>
+            {universities?.length ? (
+              <Select value={form.universityName} onChange={(e) => set('universityName', e.target.value)} className={errors.universityName ? '[&_select]:border-red-400' : ''}>
+                <option value="">Select your university</option>
+                {universities.map((u) => (
+                  <option key={u} value={u}>
+                    {u}
+                  </option>
+                ))}
+              </Select>
+            ) : (
+              <Input autoComplete="organization" value={form.universityName} onChange={(e) => set('universityName', e.target.value)} invalid={!!errors.universityName} />
             )}
-            <Field label="Email address" required error={errors.email}>
-              <Input type="email" autoComplete="email" value={form.email} onChange={(e) => set('email', e.target.value)} invalid={!!errors.email} />
-            </Field>
-            <Field label="Phone number" required error={errors.phone}>
-              <Input type="tel" autoComplete="tel" inputMode="tel" placeholder="+91 98765 43210" value={form.phone} onChange={(e) => set('phone', e.target.value)} invalid={!!errors.phone} />
-            </Field>
-            {mode === 'register' && (
-              <Field label="Enrollment number" hint="Optional" error={errors.enrollmentNumber}>
-                <Input value={form.enrollmentNumber} onChange={(e) => set('enrollmentNumber', e.target.value)} invalid={!!errors.enrollmentNumber} />
-              </Field>
-            )}
-            {submitError && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{submitError}</p>}
-            <Button type="submit" size="lg" className="w-full" loading={busy} icon={UserPlus}>
-              {mode === 'register' ? 'Register & continue' : 'Continue'}
-            </Button>
-          </form>
-        </Card>
-      )}
+          </Field>
+          <Field label="Email address" required error={errors.email}>
+            <Input type="email" autoComplete="email" value={form.email} onChange={(e) => set('email', e.target.value)} invalid={!!errors.email} />
+          </Field>
+          <Field label="Phone number" required error={errors.phone}>
+            <Input type="tel" autoComplete="tel" inputMode="tel" placeholder="+91 98765 43210" value={form.phone} onChange={(e) => set('phone', e.target.value)} invalid={!!errors.phone} />
+          </Field>
+          <Field label="Enrollment number" hint="Optional" error={errors.enrollmentNumber}>
+            <Input value={form.enrollmentNumber} onChange={(e) => set('enrollmentNumber', e.target.value)} invalid={!!errors.enrollmentNumber} />
+          </Field>
+          {submitError && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{submitError}</p>}
+          <Button type="submit" size="lg" className="w-full" loading={busy} icon={UserPlus}>
+            Continue
+          </Button>
+        </form>
+      </Card>
     </StudentShell>
   );
 }

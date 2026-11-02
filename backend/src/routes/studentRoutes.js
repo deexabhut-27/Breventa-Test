@@ -4,7 +4,7 @@ import { requireStudent } from '../middleware/auth.js';
 import { studentLimiter } from '../middleware/rateLimiters.js';
 import { validate } from '../middleware/validate.js';
 import { asyncHandler as h } from '../utils/asyncHandler.js';
-import { responseParams, responseSchema, startSchema, submitSchema, violationSchema } from '../validators/index.js';
+import { responseParams, responseSchema, startSchema, submitSchema, heartbeatSchema, violationSchema } from '../validators/index.js';
 
 const router = Router();
 
@@ -16,7 +16,7 @@ router.get('/me', h(exam.me));
 router.post('/attempt/start', validate({ body: startSchema }), h(exam.start));
 router.get('/attempt', h(exam.current));
 router.put('/attempt/responses/:index', validate({ params: responseParams, body: responseSchema }), h(exam.answer));
-router.post('/attempt/heartbeat', h(exam.heartbeat));
+router.post('/attempt/heartbeat', validate({ body: heartbeatSchema }), h(exam.heartbeat));
 router.post('/attempt/violations', validate({ body: violationSchema }), h(exam.violation));
 router.post('/attempt/submit', validate({ body: submitSchema }), h(exam.submit));
 

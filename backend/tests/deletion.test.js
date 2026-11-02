@@ -20,7 +20,7 @@ async function populate() {
   await api().put('/api/student/attempt/responses/0').set(done.headers).send({ selectedOption: 1, seq: 1 });
   await api().post('/api/student/attempt/submit').set(done.headers).send({});
   const term = await startExam(exam);
-  await api().post('/api/student/attempt/violations').set(term.headers).send({ type: 'TAB_SWITCH' });
+  await api().post('/api/student/attempt/violations').set(term.headers).send({ type: 'SCREENSHOT_ATTEMPT' });
   const live = await startExam(exam);
   await api().put('/api/student/attempt/responses/0').set(live.headers).send({ selectedOption: 2, seq: 1 });
   await registerStudent(exam);

@@ -1,4 +1,4 @@
-import { ArrowLeft, Check, FileText, MessageSquare, RefreshCw, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Check, FileText, MessageSquare, RefreshCw, RotateCcw, Trash2, X } from 'lucide-react';
 import { useAdminAuth } from '../../context/AdminAuthContext.jsx';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -15,6 +15,7 @@ export default function ResultDetail() {
   const toast = useToast();
   const { can } = useAdminAuth();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmRetake, setConfirmRetake] = useState(false);
   const [result, setResult] = useState(null);
   const [detail, setDetail] = useState(null);
   const [error, setError] = useState('');
@@ -63,6 +64,14 @@ export default function ResultDetail() {
                 Notes & rounds
               </Button>
             )}
+            {result.status === 'TERMINATED' &&
+              (result.retakeAllowedAt ? (
+                <Badge color="green">Retake allowed {fmtDateTime(result.retakeAllowedAt)}</Badge>
+              ) : (
+                <Button variant="secondary" icon={RotateCcw} onClick={() => setConfirmRetake(true)}>
+                  Allow retake
+                </Button>
+              ))}
             <Button variant="danger" icon={Trash2} onClick={() => setConfirmDelete(true)}>
               Delete
             </Button>
@@ -269,6 +278,28 @@ export default function ResultDetail() {
           </ol>
         )}
       </Card>
+      <ConfirmDialog
+        open={confirmRetake}
+        title="Allow retake"
+        message={`Let ${result.studentName} take “${result.examTitle}” again? This terminated attempt stays in the records, and the student gets one fresh attempt using the same email and phone number. The examination must still be open.`}
+        confirmLabel="Allow retake"
+        variant="primary"
+        loading={busy === 'retake'}
+        onClose={() => setConfirmRetake(false)}
+        onConfirm={async () => {
+          setBusy('retake');
+          try {
+            await adminApi.post(`/admin/results/${id}/allow-retake`);
+            toast.success(`${result.studentName} can now take the examination again`);
+            setConfirmRetake(false);
+            load();
+          } catch (err) {
+            toast.error(errorMessage(err));
+          } finally {
+            setBusy('');
+          }
+        }}
+      />
       <ConfirmDialog
         open={confirmDelete}
         title="Delete result permanently"

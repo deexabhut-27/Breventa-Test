@@ -43,16 +43,24 @@ export async function getPublicExam(req, res) {
   res.json({ success: true, data: { ...publicExamView(exam), serverNow: new Date().toISOString() } });
 }
 
+const loginResponse = (student) => ({ success: true, data: { token: signStudentToken(student), student: studentView(student), existing: true } });
+
 export async function register(req, res) {
   const exam = await findPublicExam(req.params.slug);
-  assertRegistrationOpen(exam);
   const { fullName, phone, email, enrollmentNumber } = req.body;
   let { universityName } = req.body;
+
+  // Already registered with this email + phone? Log in to that profile instead (any number of
+  // times, even after a terminated attempt or once registration has closed).
+  const existing = await Student.findOne({ examination: exam._id, email, phone });
+  if (existing) return res.json(loginResponse(existing));
+  assertRegistrationOpen(exam);
 
   // Once admins have added universities, students must pick one from that list.
   const allowed = await activeUniversityNames();
   if (allowed.length) {
-    const match = allowed.find((n) => n.toLowerCase() === universityName.trim().toLowerCase());
+    const wanted = universityName.trim().replace(/\s+/g, ' ').toLowerCase();
+    const match = allowed.find((n) => n.toLowerCase() === wanted);
     if (!match) throw AppError.badRequest('Select your university from the list', 'INVALID_UNIVERSITY');
     universityName = match;
   }
@@ -76,7 +84,7 @@ export async function register(req, res) {
     const key = Object.keys(err.keyValue || err.keyPattern || {}).find((k) => k !== 'examination');
     const field = key === 'phone' ? 'phone number' : key === 'enrollmentNumber' ? 'enrollment number' : 'email address';
     throw AppError.conflict(
-      `This ${field} is already registered for this examination. Use "Already registered? Continue" with your email and phone number.`,
+      `This ${field} is already registered for this examination with different details. Enter the same email address and phone number you registered with.`,
       'ALREADY_REGISTERED',
     );
   }
@@ -86,9 +94,19 @@ export async function register(req, res) {
 
 export async function continueRegistration(req, res) {
   const exam = await findPublicExam(req.params.slug);
-  const student = await Student.findOne({ examination: exam._id, email: req.body.email, phone: req.body.phone });
-  if (!student) throw AppError.notFound('No registration matches this email and phone number for this examination', 'REGISTRATION_NOT_FOUND');
-  res.json({ success: true, data: { token: signStudentToken(student), student: studentView(student) } });
+  const { email, phone } = req.body;
+  // Students can log back in any number of times, including after a terminated attempt
+  // (the instructions page then explains why they cannot start).
+  const student = await Student.findOne({ examination: exam._id, email, phone });
+  if (!student) {
+    const clash = await Student.findOne({ examination: exam._id, $or: [{ email }, { phone }] }).select('email').lean();
+    if (clash) {
+      const which = clash.email === email ? 'email address is registered with a different phone number' : 'phone number is registered with a different email address';
+      throw AppError.conflict(`This ${which}. Enter the same email address and phone number you registered with.`, 'DETAILS_MISMATCH');
+    }
+    throw AppError.notFound('No registration matches this email and phone number for this examination', 'REGISTRATION_NOT_FOUND');
+  }
+  res.json(loginResponse(student));
 }
 
 export { studentView };

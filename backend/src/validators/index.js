@@ -156,8 +156,11 @@ export const violationSchema = z.object({
   reason: z.string().trim().max(500).optional(),
   eventId: z.string().trim().max(100).optional(),
   clientAt: emptyToUndef(z.coerce.date().optional()),
+  // true when the page became visible again after this hide event
+  returned: z.boolean().optional(),
   pendingResponses: pendingSchema,
 });
+export const heartbeatSchema = z.object({ visible: z.boolean().optional() });
 export const submitSchema = z.object({ pendingResponses: pendingSchema });
 export const beaconSchema = z.object({
   token: z.string().min(10).max(4000),

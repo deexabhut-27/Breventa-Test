@@ -24,6 +24,10 @@ export const SUBMISSION_TYPES = ['MANUAL', 'AUTO_TIMEOUT', 'TERMINATED', 'ADMIN_
 
 // Violations that count toward the tab-switch policy.
 export const COUNTED_VIOLATIONS = ['TAB_SWITCH', 'WINDOW_HIDDEN', 'NAVIGATION'];
+// Leaving the page (tab switch, minimise, another app) is only logged. It becomes a counted
+// violation once the student has been away for AWAY_COUNT_SECONDS without coming back.
+export const AWAY_VIOLATIONS = ['TAB_SWITCH', 'WINDOW_HIDDEN'];
+export const AWAY_COUNT_SECONDS = 10 * 60;
 // Events that are recorded for monitoring but never terminate an attempt on their own.
 export const LOGGED_EVENTS = [
   'WINDOW_BLUR',
@@ -32,6 +36,7 @@ export const LOGGED_EVENTS = [
   'NAVIGATION_BLOCKED',
   'HEARTBEAT_LOST',
   'RECONNECTED',
+  'RETURNED_TO_EXAM',
   'SESSION_REPLACED',
   'FULLSCREEN_EXIT',
   'PASTE_ATTEMPT',

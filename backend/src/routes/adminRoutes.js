@@ -84,6 +84,7 @@ router.get('/results/summary', can('results'), validate({ query: exportQuery }),
 router.get('/results/:id', can('results'), id, h(results.getResult));
 router.get('/results/:id/pdf', can('results'), id, h(results.studentPdf));
 router.post('/results/:id/reevaluate', can('results'), id, h(results.reevaluate));
+router.post('/results/:id/allow-retake', can('results'), id, h(results.allowRetake));
 router.delete('/results/:id', can('results'), id, h(results.deleteResult));
 
 router.get('/candidates', can('candidates'), validate({ query: v.candidateListSchema }), h(candidates.listCandidates));
