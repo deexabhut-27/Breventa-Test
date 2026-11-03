@@ -19,6 +19,18 @@ if (typeof window !== 'undefined') {
 export const isStandalone = () => window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true;
 export const isIos = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 export const canPrompt = () => !!deferred;
+export const isAndroid = () => /android/i.test(navigator.userAgent);
+export const isMobile = () => isIos() || isAndroid();
+/** WhatsApp, Instagram, Facebook, LinkedIn, Telegram… open links in their own browser, which cannot install apps. */
+export const isInAppBrowser = () => /FBAN|FBAV|Instagram|WhatsApp|LinkedInApp|Line\/|Telegram|Snapchat|; wv\)/i.test(navigator.userAgent);
+
+/** Which set of install steps to show on this device. */
+export function installPlatform() {
+  if (isInAppBrowser()) return 'in-app';
+  if (isIos()) return 'ios';
+  if (isAndroid()) return 'android';
+  return 'desktop';
+}
 
 export function onInstallChange(fn) {
   listeners.add(fn);

@@ -1,6 +1,6 @@
 import { Globe, Mail, Phone } from 'lucide-react';
 import { COMPANY } from '../../lib/company.js';
-import InstallAppButton from '../../components/InstallAppButton.jsx';
+import InstallAppButton, { InstallBanner } from '../../components/InstallAppButton.jsx';
 
 export default function StudentShell({ title, children, wide = false, hideFooter = false }) {
   return (
@@ -17,6 +17,7 @@ export default function StudentShell({ title, children, wide = false, hideFooter
         </div>
       </header>
       <main className={`mx-auto w-full flex-1 py-5 sm:py-8 ${wide ? 'px-4 sm:px-8 lg:px-12' : 'max-w-xl px-4'}`}>{children}</main>
+      <InstallBanner />
       {!hideFooter && (
         <footer className="border-t border-slate-200 bg-white">
           <div className="flex w-full flex-col items-center justify-between gap-2 px-4 py-4 sm:px-8 lg:px-12 text-center text-xs text-slate-500 sm:flex-row sm:text-left">

@@ -90,3 +90,11 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .intro-gradient-text, .intro-blob, .intro-rise { animation: none; }
 }
+
+/* Install banner / guide entrance */
+.install-pop { animation: install-pop 0.35s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes install-pop {
+  from { opacity: 0; transform: translateY(16px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) { .install-pop { animation: none; } }
