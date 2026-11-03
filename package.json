@@ -4,10 +4,10 @@
   "private": true,
   "description": "Online aptitude and reasoning examinations with server-controlled timing, monitoring and automatic evaluation",
   "scripts": {
-    "postinstall": "npm --prefix backend install && npm --prefix frontend install",
+    "postinstall": "npm --prefix backend install && npm --prefix frontend install --include=dev",
     "dev": "concurrently -n api,web -c blue,magenta \"npm --prefix backend run dev\" \"npm --prefix frontend run dev\"",
     "build": "npm --prefix frontend run build",
-    "start": "NODE_ENV=production npm --prefix backend start",
+    "start": "npm --prefix backend start",
     "seed": "npm --prefix backend run seed",
     "test": "npm --prefix backend test",
     "admin:reset": "npm --prefix backend run admin:reset",
