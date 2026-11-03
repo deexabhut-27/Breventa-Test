@@ -72,8 +72,10 @@ export function createApp() {
   });
 
   if (env.isServerless) {
-    app.use('/api/admin', async (_req, _res, next) => {
-      await maybeRunMonitorTick();
+    // Runs in the background: admin pages must never wait for the monitor (it walks every
+    // in-progress attempt, which takes a while during a large exam).
+    app.use('/api/admin', (_req, _res, next) => {
+      maybeRunMonitorTick();
       next();
     });
   }

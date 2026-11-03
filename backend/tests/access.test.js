@@ -69,10 +69,10 @@ describe('editing students', () => {
     const res = await api()
       .put(`/api/admin/students/${s.student.id}`)
       .set(sa.auth)
-      .send({ fullName: 'Corrected Name', universityName: 'New University', phone: '+91 99999 11111', email: 'Fixed@Test.edu', enrollmentNumber: '' });
+      .send({ fullName: 'Corrected Name', universityName: 'New University', phone: '99999 11111', email: 'Fixed@Test.edu', enrollmentNumber: '' });
     expect(res.status).toBe(200);
     const student = await Student.findById(s.student.id);
-    expect(student).toMatchObject({ fullName: 'Corrected Name', phone: '+919999911111', email: 'fixed@test.edu' });
+    expect(student).toMatchObject({ fullName: 'Corrected Name', phone: '9999911111', email: 'fixed@test.edu' });
     expect(student.enrollmentNumber).toBeUndefined();
     const result = await Result.findOne({ student: s.student.id });
     expect(result).toMatchObject({ studentName: 'Corrected Name', universityName: 'New University', email: 'fixed@test.edu' });

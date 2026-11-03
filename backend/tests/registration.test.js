@@ -22,20 +22,23 @@ describe('student registration', () => {
   });
 
   it('registers a student and normalises the phone number', async () => {
-    const res = await register(studentData({ phone: '+91 98765-43210', email: 'Mixed@Case.EDU' }));
+    const res = await register(studentData({ phone: '98765-43210', email: 'Mixed@Case.EDU' }));
     expect(res.status).toBe(201);
     expect(res.body.data.token).toBeTruthy();
     const s = await Student.findOne();
-    expect(s.phone).toBe('+919876543210');
+    expect(s.phone).toBe('9876543210');
     expect(s.email).toBe('mixed@case.edu');
   });
 
   it('validates required fields', async () => {
     expect((await register(studentData({ email: 'not-an-email' }))).status).toBe(400);
     expect((await register(studentData({ phone: '123' }))).status).toBe(400);
+    expect((await register(studentData({ phone: '98765432101' }))).status).toBe(400); // 11 digits
+    expect((await register(studentData({ phone: '+919876543210' }))).status).toBe(400); // country code not accepted
     expect((await register(studentData({ fullName: '' }))).status).toBe(400);
     expect((await register(studentData({ universityName: '' }))).status).toBe(400);
-    expect((await register(studentData({ enrollmentNumber: '' }))).status).toBe(201); // optional
+    expect((await register(studentData({ enrollmentNumber: '' }))).status).toBe(400);
+    expect((await register(studentData({ enrollmentNumber: undefined }))).status).toBe(400);
   });
 
   it('requires a university from the admin list once one exists', async () => {

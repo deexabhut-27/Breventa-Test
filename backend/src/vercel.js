@@ -39,8 +39,13 @@ function ensureDb(ctx) {
   if (!ctx.ready) {
     ctx.ready = ctx
       .connectDB(undefined, { retries: 2 })
-      .then(() => ctx.hashManuallyAddedAdmins().catch((err) => ctx.logger.error({ err }, 'Failed to activate manually added admins')))
-      .then(() => ctx.runDataMigrations().catch((err) => ctx.logger.error({ err }, 'Data migrations failed')))
+      // Run side by side: on an up-to-date database this is two quick reads per cold start.
+      .then(() =>
+        Promise.all([
+          ctx.hashManuallyAddedAdmins().catch((err) => ctx.logger.error({ err }, 'Failed to activate manually added admins')),
+          ctx.runDataMigrations().catch((err) => ctx.logger.error({ err }, 'Data migrations failed')),
+        ]),
+      )
       .catch((err) => {
         ctx.ready = null; // retry on the next request instead of caching the failure
         throw err;

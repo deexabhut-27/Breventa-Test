@@ -349,35 +349,16 @@ function violationSummary(attempt, extra = {}) {
 const fmtAway = (seconds) => (seconds >= 60 ? `${Math.round(seconds / 60)} minute(s)` : `${Math.round(seconds)} second(s)`);
 
 /**
- * Records a monitoring event. Leaving the page is only logged; it counts as a violation once the
- * student has been away for AWAY_COUNT_SECONDS (see recordAway). Counted violations terminate the
- * attempt once policy.maxViolations is reached. Screen capture terminates immediately; copying
+ * Records a monitoring event. Leaving the examination window and screen capture terminate the
+ * attempt immediately. Other counted violations terminate it once policy.maxViolations is reached; copying
  * terminates after COPY_WARNINGS_ALLOWED warnings. Duplicate eventIds are ignored.
  */
-export async function recordViolation(attemptId, { type, reason, eventId, clientAt, source = 'CLIENT', returned = false }) {
-  if (AWAY_VIOLATIONS.includes(type)) return recordAway(attemptId, { type, reason, eventId, clientAt, source, returned });
+export async function recordViolation(attemptId, { type, reason, eventId, clientAt, source = 'CLIENT' }) {
+  // Leaving the examination window (tab switch, another app or browser, minimise) ends the attempt
+  // immediately, in every policy mode. The browser's later "returned" report reuses the same
+  // eventId, so it is ignored as a duplicate.
+  if (AWAY_VIOLATIONS.includes(type)) return applyViolation(attemptId, { type, reason, eventId, clientAt, source, instant: true });
   return applyViolation(attemptId, { type, reason, eventId, clientAt, source });
-}
-
-/** Page hidden: log it and start the away clock. Page visible again: stop the clock and count it if it ran too long. */
-async function recordAway(attemptId, { type, reason, eventId, clientAt, source, returned }) {
-  const now = new Date();
-  const summary = await applyViolation(attemptId, { type, reason, eventId, clientAt, source, counted: false });
-  if (summary.status !== ATTEMPT_STATUS.IN_PROGRESS) return summary;
-
-  if (!returned) {
-    await Attempt.updateOne(
-      { _id: attemptId, status: ATTEMPT_STATUS.IN_PROGRESS, awaySince: null },
-      { $set: { awaySince: now, awayEventId: eventId || randomUUID() } },
-    );
-    return { ...summary, counted: false, away: true };
-  }
-  const attempt = await Attempt.findById(attemptId).select('awaySince awayEventId startedAt');
-  // If the "page hidden" beacon never arrived, fall back to the browser's hide time (never before the start).
-  let since = attempt.awaySince;
-  if (!since && clientAt) since = new Date(Math.min(now.getTime(), Math.max(new Date(clientAt).getTime(), attempt.startedAt.getTime())));
-  if (!since) return { ...summary, counted: false };
-  return endAway(attempt, { since, key: attempt.awayEventId || eventId, now, source });
 }
 
 /** The student is back on the page. Counts one violation if they were away for AWAY_COUNT_SECONDS or more. */
@@ -409,9 +390,8 @@ export function countAway(attemptId, { key, seconds, source = 'SERVER' }) {
   });
 }
 
-async function applyViolation(attemptId, { type, reason, eventId, clientAt, source = 'CLIENT', counted = COUNTED_VIOLATIONS.includes(type) }) {
+async function applyViolation(attemptId, { type, reason, eventId, clientAt, source = 'CLIENT', counted = COUNTED_VIOLATIONS.includes(type), instant = INSTANT_TERMINATION_VIOLATIONS.includes(type) }) {
   const isCopy = COPY_VIOLATIONS.includes(type);
-  const instant = INSTANT_TERMINATION_VIOLATIONS.includes(type);
   const inc = { ...(counted ? { violationCount: 1 } : {}), ...(isCopy ? { copyCount: 1 } : {}) };
   const entry = { type, counted, reason: reason || VIOLATION_LABELS[type], eventId, clientAt, source, at: new Date() };
   const filter = { _id: attemptId, status: ATTEMPT_STATUS.IN_PROGRESS };
@@ -429,7 +409,9 @@ async function applyViolation(attemptId, { type, reason, eventId, clientAt, sour
   }
 
   let terminateReason = null;
-  if (instant) {
+  if (instant && AWAY_VIOLATIONS.includes(type)) {
+    terminateReason = `Left the examination window: ${entry.reason}`;
+  } else if (instant) {
     terminateReason = `${VIOLATION_LABELS[type]} detected`;
   } else if (isCopy && updated.copyCount > COPY_WARNINGS_ALLOWED) {
     terminateReason = `${VIOLATION_LABELS[type]} again after ${COPY_WARNINGS_ALLOWED} warning(s)`;

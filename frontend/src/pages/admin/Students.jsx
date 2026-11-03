@@ -84,7 +84,8 @@ function EditStudentModal({ student, onClose, onSaved }) {
         fullName: student.fullName,
         universityName: student.universityName,
         email: student.email,
-        phone: student.phone,
+        // Older records may be stored as +91XXXXXXXXXX; the form takes the 10-digit number.
+        phone: (student.phone || '').replace(/\D/g, '').slice(-10),
         enrollmentNumber: student.enrollmentNumber || '',
       });
     }
@@ -130,7 +131,7 @@ function EditStudentModal({ student, onClose, onSaved }) {
           <Input type="email" value={form.email} onChange={(e) => set('email', e.target.value)} />
         </Field>
         <Field label="Phone" required>
-          <Input type="tel" value={form.phone} onChange={(e) => set('phone', e.target.value)} />
+          <Input type="tel" inputMode="numeric" maxLength={10} placeholder="9876543210" value={form.phone} onChange={(e) => set('phone', e.target.value.replace(/\D/g, '').slice(0, 10))} />
         </Field>
         <Field label="Enrollment number" hint="Optional">
           <Input value={form.enrollmentNumber} onChange={(e) => set('enrollmentNumber', e.target.value)} />

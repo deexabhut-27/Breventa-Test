@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { Attempt, Result, Student } from '../models/index.js';
+import { phoneMatch } from '../validators/index.js';
 import { studentCache } from '../services/cache.js';
 import { deleteStudents } from '../services/deletionService.js';
 import { AppError } from '../utils/AppError.js';
@@ -53,11 +54,11 @@ export async function updateStudent(req, res) {
   if (!student) throw AppError.notFound('Student not found');
   const { fullName, universityName, phone, email, enrollmentNumber } = req.body;
 
-  const or = [{ email }, { phone }];
+  const or = [{ email }, { phone: phoneMatch(phone) }];
   if (enrollmentNumber) or.push({ enrollmentNumber });
   const clash = await Student.findOne({ examination: student.examination, _id: { $ne: student._id }, $or: or }).lean();
   if (clash) {
-    const field = clash.email === email ? 'email address' : clash.phone === phone ? 'phone number' : 'enrollment number';
+    const field = clash.email === email ? 'email address' : clash.phone.endsWith(phone) ? 'phone number' : 'enrollment number';
     throw AppError.conflict(`Another student in this examination already uses this ${field}`, 'ALREADY_REGISTERED');
   }
 

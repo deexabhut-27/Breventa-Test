@@ -69,7 +69,6 @@ export default function Instructions() {
     );
   if (!data) return <Spinner className="h-screen" />;
   const { exam, student, attempts } = data;
-  const strict = exam.violationPolicy.mode === 'STRICT';
   const notStarted = exam.startAt && new Date(exam.startAt) > new Date(data.serverNow);
   const ended = exam.endAt && new Date(exam.endAt) < new Date(data.serverNow);
 
@@ -110,10 +109,8 @@ export default function Instructions() {
   const critical = [
     {
       icon: ShieldAlert,
-      title: strict ? 'Stay on this page — strict mode' : 'Stay on this page',
-      text: strict
-        ? 'Leaving the page is recorded. Staying away for 10 minutes ends your exam.'
-        : `Leaving the page is recorded. Staying away for 10 minutes is a violation — ${exam.violationPolicy.maxViolations - 1} warning(s), then the exam ends.`,
+      title: 'Stay on this window',
+      text: 'Switching tabs, browsers or apps, minimising or locking the screen ends your exam immediately. Moving the mouse outside the window is fine — just don’t click elsewhere.',
     },
     {
       icon: Camera,

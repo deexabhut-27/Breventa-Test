@@ -1,4 +1,4 @@
-// Sample question bank: 30 Easy, 20 Medium, 10 Hard/Tricky (60 total).
+// Sample question bank: 24 Easy, 28 Medium, 8 Hard/Tricky (60 total). Verbal Ability is all Medium.
 // Format: [text, [A, B, C, D], correctIndex, explanation]
 const QA = 'Quantitative Aptitude';
 const LR = 'Logical Reasoning';
@@ -22,14 +22,6 @@ const easy = {
     ['Find the next letter in the series: A, C, E, G, ?', ['H', 'I', 'J', 'K'], 1, 'Letters skip one each time: G + 2 = I.'],
     ['Find the odd one out.', ['3', '7', '9', '11'], 2, '9 is not a prime number; the others are.'],
     ['Book is to Reading as Fork is to:', ['Drawing', 'Writing', 'Eating', 'Stirring'], 2, 'A book is used for reading; a fork is used for eating.'],
-  ],
-  [VA]: [
-    ["Choose the synonym of 'Abundant'.", ['Scarce', 'Plentiful', 'Rare', 'Tiny'], 1, 'Abundant means existing in large quantities: plentiful.'],
-    ["Choose the antonym of 'Ancient'.", ['Old', 'Modern', 'Antique', 'Historic'], 1, 'The opposite of ancient is modern.'],
-    ['Fill in the blank: She ___ to the market yesterday.', ['go', 'goes', 'went', 'gone'], 2, "'Yesterday' requires the simple past tense: went."],
-    ['Which word is spelled correctly?', ['Accomodate', 'Accommodate', 'Acommodate', 'Acomodate'], 1, 'Accommodate has a double c and a double m.'],
-    ["Choose the synonym of 'Brief'.", ['Short', 'Lengthy', 'Detailed', 'Slow'], 0, 'Brief means short in duration or length.'],
-    ['Fill in the blank: He is good ___ mathematics.', ['in', 'at', 'on', 'with'], 1, "The correct collocation is 'good at'."],
   ],
   [AR]: [
     ['In a row of 20 students, Ravi is 7th from the left. What is his position from the right?', ['12th', '13th', '14th', '15th'], 2, 'Position from right = 20 - 7 + 1 = 14.'],
@@ -63,10 +55,18 @@ const medium = {
     ['Find the missing term: AZ, BY, CX, ?', ['DV', 'DW', 'EW', 'DX'], 1, 'First letter moves forward, second moves backward: D and W.'],
   ],
   [VA]: [
-    ["Choose the word closest in meaning to 'Ephemeral'.", ['Lasting', 'Short-lived', 'Eternal', 'Ancient'], 1, 'Ephemeral means lasting a very short time.'],
-    ["Identify the part with an error: 'Neither of the boys / have completed / their homework.'", ['Neither of the boys', 'have completed', 'their homework', 'No error'], 1, "'Neither' is singular, so it should be 'has completed'."],
-    ["What does the idiom 'to beat around the bush' mean?", ['To avoid the main topic', 'To work very hard', 'To hit someone', 'To search thoroughly'], 0, 'It means to avoid talking about what is important.'],
-    ["Choose the antonym of 'Benevolent'.", ['Kind', 'Generous', 'Malevolent', 'Charitable'], 2, 'Benevolent means well-meaning; malevolent means wishing harm.'],
+    ['Arrange the sentences in a logical order. P: He then prepared a detailed project plan. Q: Rahul was assigned a new client project. R: Finally, the project was delivered ahead of schedule. S: First, he met the client to understand the requirements.', ['QSPR', 'SQPR', 'QPSR', 'PQSR'], 0, 'Q introduces the project, S is the first step, P follows it, and R concludes.'],
+    ["What does the idiom 'to cut corners' mean?", ['To do something poorly to save time or money', 'To take a shorter route', 'To reduce a team in size', 'To finish work early'], 0, "To 'cut corners' is to skip steps or do work cheaply, often lowering quality."],
+    ["What does the idiom 'the ball is in your court' mean?", ['It is your turn to act or decide', 'You have won the argument', 'You are being blamed', 'You must start again'], 0, 'It means the next move or decision is yours.'],
+    ["Choose the word that best completes the sentence: 'The new policy was met with ___ from employees, who felt it had been imposed without any consultation.'", ['enthusiasm', 'resentment', 'gratitude', 'curiosity'], 1, 'Being imposed without consultation causes bitterness: resentment.'],
+    ["Choose the pair that best completes the sentence: 'Although the proposal seemed ___ at first, a closer analysis revealed several ___ flaws.'", ['promising, fundamental', 'flawed, minor', 'weak, trivial', 'impressive, negligible'], 0, "'Although' signals contrast: a good first impression (promising) against serious (fundamental) problems."],
+    ["Choose the word closest in meaning to 'Pragmatic'.", ['Idealistic', 'Practical', 'Theoretical', 'Emotional'], 1, 'Pragmatic means dealing with things sensibly and realistically: practical.'],
+    ["Choose the word most nearly opposite in meaning to 'Ambiguous'.", ['Vague', 'Clear', 'Uncertain', 'Obscure'], 1, 'Ambiguous means open to more than one meaning; clear is the opposite.'],
+    ["Choose the one word for: 'A speech delivered without any preparation'.", ['Extempore', 'Eulogy', 'Monologue', 'Soliloquy'], 0, 'Extempore means spoken or done without preparation.'],
+    ['Choose the pair that shows the same relationship as Author : Novel.', ['Painter : Brush', 'Composer : Symphony', 'Teacher : School', 'Reader : Book'], 1, 'An author creates a novel just as a composer creates a symphony.'],
+    ['Which sentence does NOT fit the paragraph? (A) Regular exercise improves heart health. (B) It also helps reduce stress and anxiety. (C) The first Olympic Games were held in ancient Greece. (D) Even a 30-minute daily walk can make a difference.', ['A', 'B', 'C', 'D'], 2, 'The paragraph is about the benefits of exercise; the history of the Olympics is off-topic.'],
+    ["Statement: 'Our sales doubled after we launched the new website.' Which assumption is the speaker most likely making?", ['The new website caused the rise in sales.', 'Sales will double again next year.', 'Competitors do not have websites.', 'The old website cost nothing to run.'], 0, 'The speaker links the sales increase to the website, assuming it was the cause.'],
+    ['Passage: Remote work has given companies access to a global talent pool, but it has also made it harder to build a shared culture. Firms that succeed treat culture as something to be designed deliberately rather than something that forms on its own. Which statement best reflects the author\'s view?', ['Companies should stop hiring remote employees.', 'Culture in remote companies must be built intentionally.', 'Hiring globally lowers productivity.', 'Culture develops naturally in remote teams.'], 1, 'The author says successful firms design culture deliberately instead of leaving it to chance.'],
   ],
   [AR]: [
     ['P, Q, R, S and T sit in a row facing North. R is in the middle, P is immediately to the left of R, T is at the extreme right, and S is not at an end. Who is at the extreme left?', ['P', 'Q', 'S', 'T'], 1, 'Order from left: Q, P, R, S, T.'],
@@ -90,10 +90,6 @@ const hard = {
   [LR]: [
     ['Find the next number: 2, 3, 5, 9, 17, 33, ?', ['57', '63', '65', '66'], 2, 'Differences double: 1, 2, 4, 8, 16, 32; 33 + 32 = 65.'],
     ['Statements: Some cats are dogs. No dog is a bird. Conclusions: I. Some cats are not birds. II. No cat is a bird.', ['Only I follows', 'Only II follows', 'Both follow', 'Neither follows'], 0, 'The cats that are dogs cannot be birds, so I follows; II is not certain.'],
-  ],
-  [VA]: [
-    ["Choose the word that best completes the sentence: 'His ___ remarks offended everyone at the meeting, though he insisted they were merely candid.'", ['tactful', 'acerbic', 'laudatory', 'diffident'], 1, 'Acerbic means sharp and forthright, which fits remarks that offend.'],
-    ["Choose the word most nearly OPPOSITE in meaning to 'Obsequious'.", ['Servile', 'Fawning', 'Assertive', 'Submissive'], 2, 'Obsequious means excessively eager to please; assertive is the opposite attitude.'],
   ],
   [AR]: [
     ['A cube painted red on all faces is cut into 27 identical smaller cubes. How many smaller cubes have exactly two painted faces?', ['6', '8', '12', '24'], 2, 'Two-face cubes lie on the edges: 12 edges x 1 cube each = 12.'],
@@ -134,7 +130,7 @@ export const defaultExam = {
     'The examination is submitted automatically when the timer reaches zero.',
   ].join('\n'),
   durationMinutes: 60,
-  distribution: { easy: 30, medium: 20, hard: 10 },
+  distribution: { easy: 24, medium: 28, hard: 8 },
   markingScheme: 'EXAM',
   marksPerQuestion: 1,
   negativeMarking: { enabled: true, marks: 0.25 },

@@ -251,37 +251,22 @@ describe('submission and evaluation', () => {
 describe('anti-cheating', () => {
   const violation = (headers, body) => api().post('/api/student/attempt/violations').set(headers).send(body);
 
-  // Puts the start of the current away period `minutes` in the past.
-  const awayFor = (attemptId, minutes) => Attempt.updateOne({ _id: attemptId }, { $set: { awaySince: new Date(Date.now() - minutes * 60_000) } });
   const leave = (headers, eventId, extra = {}) => violation(headers, { type: 'TAB_SWITCH', eventId, ...extra });
   const comeBack = (headers, eventId, extra = {}) => violation(headers, { type: 'TAB_SWITCH', eventId, returned: true, ...extra });
 
-  it('only logs a short tab switch, and saves pending answers', async () => {
-    const { payload, headers } = await startExam(exam);
+  it('terminates immediately when the student leaves the window, and saves pending answers', async () => {
+    const { payload, headers, auth } = await startExam(exam);
     const c = await correctDisplayedOption(payload.attemptId, 0);
     const hide = await leave(headers, 'e1', { pendingResponses: [{ index: 0, selectedOption: c, seq: 1 }] });
-    expect(hide.body.data).toMatchObject({ terminated: false, counted: false, away: true });
-    expect((await Attempt.findById(payload.attemptId)).awaySince).toBeInstanceOf(Date);
-    const back = await comeBack(headers, 'e1');
-    expect(back.body.data).toMatchObject({ terminated: false, counted: false, violationCount: 0 });
-    const attempt = await Attempt.findById(payload.attemptId);
-    expect(attempt.status).toBe('IN_PROGRESS');
-    expect(attempt.awaySince).toBeUndefined();
-    expect(attempt.violations.map((v) => v.type)).toEqual(['TAB_SWITCH', 'RETURNED_TO_EXAM']);
-    expect(attempt.violations[0].counted).toBe(false);
-    expect(await StudentResponse.countDocuments({ attempt: payload.attemptId })).toBe(1);
-  });
-
-  it('terminates in STRICT mode once the student was away for 10 minutes', async () => {
-    const { payload, headers, auth } = await startExam(exam);
-    await leave(headers, 'e1');
-    await awayFor(payload.attemptId, 11);
-    const back = await comeBack(headers, 'e1');
-    expect(back.body.data.terminated).toBe(true);
+    expect(hide.body.data.terminated).toBe(true);
     const attempt = await Attempt.findById(payload.attemptId);
     expect(attempt.status).toBe('TERMINATED');
-    expect(attempt.terminationReason).toMatch(/away from the examination page for 11 minute/i);
+    expect(attempt.terminationReason).toMatch(/left the examination window/i);
+    expect(await StudentResponse.countDocuments({ attempt: payload.attemptId })).toBe(1);
     expect((await Result.findOne({ attempt: payload.attemptId })).passed).toBe(false);
+
+    // The later "returned" report for the same event is a harmless duplicate.
+    expect((await comeBack(headers, 'e1')).status).toBeLessThan(500);
 
     // Terminated attempts cannot be resumed or restarted
     expect((await api().get('/api/student/attempt').set(headers)).body.error.code).toBe('ATTEMPT_CLOSED');
@@ -289,98 +274,20 @@ describe('anti-cheating', () => {
     const restart = await api().post('/api/student/attempt/start').set(auth).send({ acceptInstructions: true });
     expect(restart.status).toBe(403);
     expect(restart.body.error.code).toBe('ATTEMPT_TERMINATED');
-    expect((await api().get('/api/student/me').set(auth)).body.data.attempts.canStart).toBe(false);
   });
 
-  it('terminates a student who is still away after 10 minutes (server monitor)', async () => {
-    const { payload, headers } = await startExam(exam);
-    await leave(headers, 'm1');
-    expect((await runMonitorTick()).away).toBe(0);
-    await awayFor(payload.attemptId, 10);
-    expect((await runMonitorTick()).away).toBe(1);
-    expect((await Attempt.findById(payload.attemptId)).status).toBe('TERMINATED');
-  });
-
-  it('counts a long absence once, whether the monitor or the return reports it first', async () => {
+  it('terminates on window focus loss (another browser or app) even in WARNING mode', async () => {
     const warnExam = await createExam({ slug: 'warn-0', violationPolicy: { mode: 'WARNING', warningsAllowed: 2, heartbeatTimeoutSeconds: 45, disconnectAction: 'FLAG', maxDisconnectSeconds: 300 } });
     const { payload, headers } = await startExam(warnExam);
-    await leave(headers, 'a1');
-    await awayFor(payload.attemptId, 12);
-    await runMonitorTick();
-    await runMonitorTick();
-    const back = await comeBack(headers, 'a1');
-    expect(back.body.data).toMatchObject({ terminated: false, counted: true, violationCount: 1 });
-    expect((await Attempt.findById(payload.attemptId)).violationCount).toBe(1);
+    const res = await violation(headers, { type: 'WINDOW_HIDDEN', eventId: 'f1', reason: 'Switched to another window, browser or application' });
+    expect(res.body.data.terminated).toBe(true);
+    expect((await Attempt.findById(payload.attemptId)).terminationReason).toMatch(/another window, browser/i);
   });
 
-  it('lets an administrator allow a retake after termination, keeping the terminated attempt', async () => {
-    const { payload, headers, auth } = await startExam(exam);
-    await violation(headers, { type: 'SCREENSHOT_ATTEMPT', eventId: 'r1' });
-    const terminated = await Result.findOne({ attempt: payload.attemptId });
-    const admin = await createAdmin();
-
-    // Only terminated results can be reactivated, and only once.
-    const retake = await api().post(`/api/admin/results/${terminated._id}/allow-retake`).set(admin.auth);
-    expect(retake.status).toBe(200);
-    expect((await api().post(`/api/admin/results/${terminated._id}/allow-retake`).set(admin.auth)).status).toBe(409);
-
-    const me = await api().get('/api/student/me').set(auth);
-    expect(me.body.data.attempts).toMatchObject({ canStart: true, terminated: false, retakeAllowed: true, attemptsUsed: 0 });
-
-    // A fresh attempt starts even though maxAttempts is 1; the terminated one stays as history.
-    const restart = await api().post('/api/student/attempt/start').set(auth).send({ acceptInstructions: true });
-    expect(restart.status).toBe(201);
-    expect(restart.body.data.attemptId).not.toBe(String(payload.attemptId));
-    expect((await Attempt.findById(restart.body.data.attemptId)).attemptNumber).toBe(2);
-    expect((await Attempt.findById(payload.attemptId)).status).toBe('TERMINATED');
-    expect((await Result.findById(terminated._id)).retakeAllowedAt).toBeInstanceOf(Date);
-    expect((await api().get('/api/student/me').set(auth)).body.data.attempts.retakeAllowed).toBe(false);
-
-    // Completed results cannot be "reactivated".
-    const h2 = { ...auth, 'x-exam-session': restart.body.data.sessionId };
-    await api().post('/api/student/attempt/submit').set(h2).send({});
-    const done = await Result.findOne({ attempt: restart.body.data.attemptId });
-    expect((await api().post(`/api/admin/results/${done._id}/allow-retake`).set(admin.auth)).status).toBe(400);
-  });
-
-  it('warns once then terminates in WARNING mode', async () => {
-    const warnExam = await createExam({ slug: 'warn-1', violationPolicy: { mode: 'WARNING', warningsAllowed: 1, heartbeatTimeoutSeconds: 45, disconnectAction: 'FLAG', maxDisconnectSeconds: 300 } });
-    const { payload, headers } = await startExam(warnExam);
-    await leave(headers, 'w1');
-    await awayFor(payload.attemptId, 10);
-    const first = await comeBack(headers, 'w1');
-    expect(first.body.data).toMatchObject({ terminated: false, counted: true, violationCount: 1, remainingBeforeTermination: 1 });
-    // Short trips away in between do not count.
-    await leave(headers, 'w2');
-    expect((await comeBack(headers, 'w2')).body.data.counted).toBe(false);
-    await leave(headers, 'w3');
-    await awayFor(payload.attemptId, 15);
-    const second = await comeBack(headers, 'w3');
-    expect(second.body.data.terminated).toBe(true);
-    expect((await Attempt.findById(payload.attemptId)).violationCount).toBe(2);
-  });
-
-  it('counts a long absence when the "page hidden" beacon was lost, using the browser hide time', async () => {
+  it('does not terminate on window focus-loss logs (WINDOW_BLUR)', async () => {
     const { payload, headers } = await startExam(exam);
-    await Attempt.updateOne({ _id: payload.attemptId }, { $set: { startedAt: new Date(Date.now() - 20 * 60_000) } });
-    const back = await comeBack(headers, 'lost', { clientAt: new Date(Date.now() - 11 * 60_000).toISOString() });
-    expect(back.body.data.terminated).toBe(true);
-  });
-
-  it('ends the away period on a heartbeat from a visible page', async () => {
-    const { payload, headers } = await startExam(exam);
-    await leave(headers, 'h1');
-    expect((await api().post('/api/student/attempt/heartbeat').set(headers).send({ visible: false })).status).toBe(200);
-    expect((await Attempt.findById(payload.attemptId)).awaySince).toBeInstanceOf(Date);
-    await api().post('/api/student/attempt/heartbeat').set(headers).send({ visible: true });
-    const attempt = await Attempt.findById(payload.attemptId);
-    expect(attempt.awaySince).toBeUndefined();
-    expect(attempt.status).toBe('IN_PROGRESS');
-
-    await leave(headers, 'h2');
-    await awayFor(payload.attemptId, 10);
-    const hb = await api().post('/api/student/attempt/heartbeat').set(headers).send({ visible: true });
-    expect(hb.body.data.terminated).toBe(true);
+    await violation(headers, { type: 'WINDOW_BLUR' });
+    expect((await Attempt.findById(payload.attemptId)).status).toBe('IN_PROGRESS');
   });
 
   it('terminates immediately on a screenshot attempt, even in WARNING mode', async () => {
@@ -413,10 +320,11 @@ describe('anti-cheating', () => {
     await api().post('/api/student/beacon').set('Content-Type', 'text/plain').send(JSON.stringify({ token, sessionId: headers['X-Exam-Session'], kind: 'violation', type: 'TAB_SWITCH', eventId: 'same' }));
     const attempt = await Attempt.findById(payload.attemptId);
     expect(attempt.violations.filter((v) => v.type === 'TAB_SWITCH')).toHaveLength(1);
-    expect(attempt.violationCount).toBe(0);
+    expect(attempt.violationCount).toBe(1);
+    expect(attempt.status).toBe('TERMINATED');
   });
 
-  it('starts the away clock from a sendBeacon report and saves pending answers', async () => {
+  it('terminates from a sendBeacon report and saves pending answers', async () => {
     const { payload, headers, token } = await startExam(exam);
     const res = await api()
       .post('/api/student/beacon')
@@ -424,8 +332,7 @@ describe('anti-cheating', () => {
       .send(JSON.stringify({ token, sessionId: headers['X-Exam-Session'], kind: 'violation', type: 'WINDOW_HIDDEN', eventId: 'b1', pendingResponses: [{ index: 2, selectedOption: 1, seq: 3 }] }));
     expect(res.status).toBe(204);
     const attempt = await Attempt.findById(payload.attemptId);
-    expect(attempt.status).toBe('IN_PROGRESS');
-    expect(attempt.awaySince).toBeInstanceOf(Date);
+    expect(attempt.status).toBe('TERMINATED');
     expect(await StudentResponse.countDocuments({ attempt: payload.attemptId })).toBe(1);
   });
 

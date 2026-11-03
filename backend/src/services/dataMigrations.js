@@ -13,7 +13,22 @@ import { logger } from '../utils/logger.js';
  * - When the app gains a new admin section, every existing ADMIN is granted it once. The list of
  *   sections already handed out is stored, so a section an admin later loses on purpose is not re-added.
  */
-export async function runDataMigrations() {
+// Bump when a fix-up is added or changed so it runs once more on every database.
+const MIGRATIONS_VERSION = 'v1';
+
+/**
+ * Serverless instances start often (every cold start), so once a database is up to date the
+ * whole set is skipped with a single read instead of ~10 sequential queries.
+ */
+export async function runDataMigrations({ force = false } = {}) {
+  const meta = mongoose.connection.db.collection('app_meta');
+  if (!force && (await meta.findOne({ _id: 'migrations', version: MIGRATIONS_VERSION }, { projection: { _id: 1 } }))) return { skipped: true };
+  const summary = await runAllMigrations();
+  await meta.updateOne({ _id: 'migrations' }, { $set: { version: MIGRATIONS_VERSION, doneAt: new Date() } }, { upsert: true });
+  return summary;
+}
+
+async function runAllMigrations() {
   const res = await Student.updateMany({ stage: { $exists: false } }, { $set: { stage: 'ONLINE_TEST', noteCount: 0 } });
   const latestBackfilled = await latestResultsOnce();
   if (res.modifiedCount) logger.info({ students: res.modifiedCount }, 'Backfilled selection stage for existing students');

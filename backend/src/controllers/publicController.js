@@ -6,6 +6,7 @@ import { signStudentToken } from '../services/tokenService.js';
 import { studentCache } from '../services/cache.js';
 import { AppError } from '../utils/AppError.js';
 import { isDuplicateKeyError } from '../utils/helpers.js';
+import { phoneMatch } from '../validators/index.js';
 
 async function findPublicExam(slug) {
   const exam = await Examination.findOne({ slug: String(slug).toLowerCase() });
@@ -52,7 +53,7 @@ export async function register(req, res) {
 
   // Already registered with this email + phone? Log in to that profile instead (any number of
   // times, even after a terminated attempt or once registration has closed).
-  const existing = await Student.findOne({ examination: exam._id, email, phone });
+  const existing = await Student.findOne({ examination: exam._id, email, phone: phoneMatch(phone) });
   if (existing) return res.json(loginResponse(existing));
   assertRegistrationOpen(exam);
 
@@ -97,9 +98,9 @@ export async function continueRegistration(req, res) {
   const { email, phone } = req.body;
   // Students can log back in any number of times, including after a terminated attempt
   // (the instructions page then explains why they cannot start).
-  const student = await Student.findOne({ examination: exam._id, email, phone });
+  const student = await Student.findOne({ examination: exam._id, email, phone: phoneMatch(phone) });
   if (!student) {
-    const clash = await Student.findOne({ examination: exam._id, $or: [{ email }, { phone }] }).select('email').lean();
+    const clash = await Student.findOne({ examination: exam._id, $or: [{ email }, { phone: phoneMatch(phone) }] }).select('email').lean();
     if (clash) {
       const which = clash.email === email ? 'email address is registered with a different phone number' : 'phone number is registered with a different email address';
       throw AppError.conflict(`This ${which}. Enter the same email address and phone number you registered with.`, 'DETAILS_MISMATCH');

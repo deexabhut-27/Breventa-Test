@@ -55,3 +55,38 @@ body {
   mask-image: radial-gradient(ellipse at 70% 0%, #000 30%, transparent 75%);
   -webkit-mask-image: radial-gradient(ellipse at 70% 0%, #000 30%, transparent 75%);
 }
+
+/* ---------- Company intro animations ---------- */
+.intro-dots {
+  background-image: radial-gradient(rgba(0, 44, 135, 0.14) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse at 80% 40%, #000 20%, transparent 70%);
+  -webkit-mask-image: radial-gradient(ellipse at 80% 40%, #000 20%, transparent 70%);
+}
+.intro-gradient-text {
+  background: linear-gradient(90deg, var(--color-brand-700), var(--color-brand-500), #38bdf8, var(--color-brand-500), var(--color-brand-700));
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: intro-shine 6s linear infinite;
+}
+.intro-blob { animation: intro-drift 14s ease-in-out infinite alternate; }
+.intro-blob-2 { animation-duration: 18s; animation-delay: -6s; }
+.intro-blob-3 { animation-duration: 16s; animation-delay: -3s; }
+.intro-rise { animation: intro-rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.intro-delay-1 { animation-delay: 0.12s; }
+.intro-delay-2 { animation-delay: 0.24s; }
+
+@keyframes intro-shine { to { background-position: 200% center; } }
+@keyframes intro-drift {
+  0% { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(-30px, 20px) scale(1.15); }
+}
+@keyframes intro-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .intro-gradient-text, .intro-blob, .intro-rise { animation: none; }
+}

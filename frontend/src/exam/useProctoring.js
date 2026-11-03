@@ -1,15 +1,20 @@
 import { useEffect, useRef } from 'react';
 import { beaconUrl } from '../lib/api.js';
 
+// Focus must be gone this long before it counts as leaving (filters out sub-second OS focus flickers).
+const FOCUS_GRACE_MS = 1000;
+
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
 /**
  * Browser-side monitoring. Browser signals are best-effort: the server's heartbeat
  * monitor and timer are the authority when the browser is closed or loses power.
  *
- *  - Hidden page (tab switch, minimise, app switch): reported immediately via sendBeacon, which
- *    starts the server's away clock; reported again by XHR when the page is visible (same eventId,
- *    returned: true). Only an absence of AWAY_COUNT_SECONDS (10 minutes) counts as a violation.
+ *  - Leaving the examination window terminates the attempt immediately on the server:
+ *      • page hidden (tab switch, minimise, screen lock): reported at once via sendBeacon;
+ *      • window loses focus while still visible (switching to another browser or app, Alt/Cmd+Tab):
+ *        reported once focus has been gone for FOCUS_GRACE_MS, so a momentary OS flicker is ignored.
+ *    Moving the mouse outside the window without clicking elsewhere does not move focus and is ignored.
  *  - Refresh / close: beforeunload shows a warning; pagehide sends an "unload" beacon that is
  *    logged but not counted (the heartbeat monitor covers closed browsers).
  *    If an unload is cancelled and the page stays hidden, it is reported as a violation.
@@ -66,10 +71,12 @@ export function useProctoring({ enabled, slug, token, sessionId, getPending, rep
         }
         if (hiddenEvent) return;
         hiddenEvent = { id: uid(), at: new Date().toISOString() };
+        clearTimeout(focusTimer);
         beacon({ kind: 'violation', type: 'TAB_SWITCH', eventId: hiddenEvent.id, reason: 'Examination page hidden (tab switch, minimise or another app)' });
       } else if (hiddenEvent) {
         const ev = hiddenEvent;
         hiddenEvent = null;
+        // Confirms the beacon by XHR (same eventId, so the server counts it once) and returns the terminated status.
         handlers.current.report({ type: 'TAB_SWITCH', eventId: ev.id, clientAt: ev.at, returned: true, reason: 'Examination page hidden (tab switch, minimise or another app)' });
       } else if (hiddenDuringUnload) {
         hiddenDuringUnload = false;
@@ -77,9 +84,22 @@ export function useProctoring({ enabled, slug, token, sessionId, getPending, rep
       }
     };
 
+    // Page still visible but focus moved to another window (another browser, app, Alt/Cmd+Tab).
+    let focusTimer = null;
+    let focusReported = false;
     const onBlur = () => {
-      if (document.visibilityState === 'visible') throttledLog('WINDOW_BLUR', 'Examination window lost focus');
+      if (unloading || focusReported || document.visibilityState !== 'visible') return;
+      clearTimeout(focusTimer);
+      focusTimer = setTimeout(() => {
+        if (unloading || focusReported || document.hasFocus() || document.visibilityState !== 'visible') return;
+        focusReported = true;
+        const id = uid();
+        const reason = 'Switched to another window, browser or application';
+        beacon({ kind: 'violation', type: 'WINDOW_HIDDEN', eventId: id, reason });
+        handlers.current.report({ type: 'WINDOW_HIDDEN', eventId: id, clientAt: new Date().toISOString(), reason });
+      }, FOCUS_GRACE_MS);
     };
+    const onFocusBack = () => clearTimeout(focusTimer);
     const block = (type, reason) => (e) => {
       e.preventDefault();
       throttledLog(type, reason, 10000);
@@ -180,6 +200,7 @@ export function useProctoring({ enabled, slug, token, sessionId, getPending, rep
     window.addEventListener('pagehide', onPageHide);
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('blur', onBlur);
+    window.addEventListener('focus', onFocusBack);
     window.addEventListener('popstate', onPopState);
     document.addEventListener('copy', onCopy);
     document.addEventListener('cut', onCopy);
@@ -200,6 +221,8 @@ export function useProctoring({ enabled, slug, token, sessionId, getPending, rep
       document.removeEventListener('visibilitychange', updateShield);
       handlers.current.onShield?.(false);
       clearTimeout(unloadTimer);
+      clearTimeout(focusTimer);
+      window.removeEventListener('focus', onFocusBack);
       window.removeEventListener('beforeunload', onBeforeUnload);
       window.removeEventListener('pagehide', onPageHide);
       document.removeEventListener('visibilitychange', onVisibility);

@@ -14,9 +14,10 @@ function validate(f) {
   if (f.fullName.trim().length < 2) e.fullName = 'Enter your full name';
   else if (!/^[\p{L}][\p{L}\s.'-]*$/u.test(f.fullName.trim())) e.fullName = 'Use letters, spaces, dots, apostrophes and hyphens only';
   if (f.universityName.trim().length < 2) e.universityName = 'Select your university';
-  if (!/^\+?[0-9]{10,15}$/.test(f.phone.replace(/[\s\-().]/g, ''))) e.phone = 'Enter a valid phone number (10–15 digits)';
+  if (!/^[0-9]{10}$/.test(f.phone)) e.phone = 'Enter a valid 10-digit phone number';
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email.trim())) e.email = 'Enter a valid email address';
-  if (f.enrollmentNumber && !/^[A-Za-z0-9/_-]+$/.test(f.enrollmentNumber.trim())) e.enrollmentNumber = 'Use letters, digits, /, _ and - only';
+  if (!f.enrollmentNumber.trim()) e.enrollmentNumber = 'Enter your enrollment number';
+  else if (!/^[A-Za-z0-9/_-]+$/.test(f.enrollmentNumber.trim())) e.enrollmentNumber = 'Use letters, digits, /, _ and - only';
   return e;
 }
 
@@ -100,17 +101,18 @@ export default function ExamLanding() {
   }
 
   return (
-    <StudentShell title={exam.title}>
+    <StudentShell title={exam.title} wide>
       <StepIndicator current={2} />
       <button type="button" onClick={() => setParams({})} className="mb-4 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800">
         <ArrowLeft className="h-4 w-4" /> Back to company details
       </button>
-      <Card className="p-5 sm:p-6">
-        <h1 className="text-lg font-semibold">Student details</h1>
-        <p className="mb-5 text-sm text-slate-500">
-          Enter your details as they appear in your university records. Registered before? Enter the same email address and phone number to continue with your profile.
+      <section className="rounded-3xl bg-white p-6 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_24px_48px_-24px_rgba(0,44,135,0.22)] ring-1 ring-slate-200/70 sm:p-8">
+        <p className="text-xs font-semibold tracking-[0.18em] text-brand-500 uppercase">Step 2 of 3</p>
+        <h1 className="mt-1 text-xl font-semibold tracking-tight text-slate-900">Student details</h1>
+        <p className="mt-1 mb-6 text-sm text-slate-500">
+          Enter your details as they appear in your university records. Registered before? Use the same email address and phone number to continue with your profile.
         </p>
-        <form onSubmit={submit} className="space-y-4" noValidate>
+        <form onSubmit={submit} className="grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2" noValidate>
           <Field label="Full name" required error={errors.fullName}>
             <Input autoComplete="name" value={form.fullName} onChange={(e) => set('fullName', e.target.value)} invalid={!!errors.fullName} />
           </Field>
@@ -132,17 +134,19 @@ export default function ExamLanding() {
             <Input type="email" autoComplete="email" value={form.email} onChange={(e) => set('email', e.target.value)} invalid={!!errors.email} />
           </Field>
           <Field label="Phone number" required error={errors.phone}>
-            <Input type="tel" autoComplete="tel" inputMode="tel" placeholder="+91 98765 43210" value={form.phone} onChange={(e) => set('phone', e.target.value)} invalid={!!errors.phone} />
+            <Input type="tel" autoComplete="tel-national" inputMode="numeric" maxLength={10} placeholder="9876543210" value={form.phone} onChange={(e) => set('phone', e.target.value.replace(/\D/g, '').slice(0, 10))} invalid={!!errors.phone} />
           </Field>
-          <Field label="Enrollment number" hint="Optional" error={errors.enrollmentNumber}>
+          <Field label="Enrollment number" required error={errors.enrollmentNumber}>
             <Input value={form.enrollmentNumber} onChange={(e) => set('enrollmentNumber', e.target.value)} invalid={!!errors.enrollmentNumber} />
           </Field>
-          {submitError && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{submitError}</p>}
-          <Button type="submit" size="lg" className="w-full" loading={busy} icon={UserPlus}>
-            Continue
-          </Button>
+          {submitError && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700 md:col-span-2">{submitError}</p>}
+          <div className="flex justify-end border-t border-slate-100 pt-5 md:col-span-2">
+            <Button type="submit" size="lg" className="w-full sm:w-auto sm:min-w-48" loading={busy} icon={UserPlus}>
+              Continue
+            </Button>
+          </div>
         </form>
-      </Card>
+      </section>
     </StudentShell>
   );
 }

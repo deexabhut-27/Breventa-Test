@@ -15,6 +15,22 @@ import { evaluateAttempt } from './evaluationService.js';
  *  4. Re-runs evaluation for finalized attempts whose evaluation previously failed.
  * Every transition is a conditional atomic update, so running several API instances is safe.
  */
+// Attempts handled side by side per tick. Over a remote database, one-at-a-time processing of a
+// large exam (e.g. 100 timers ending together) would take many seconds.
+const CONCURRENCY = 8;
+
+async function forEachLimit(items, limit, fn) {
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const item = items[next];
+      next += 1;
+      await fn(item);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+}
+
 export async function runMonitorTick(now = new Date()) {
   const summary = { expired: 0, disconnected: 0, terminated: 0, away: 0, reevaluated: 0 };
   const graceMs = env.SUBMISSION_GRACE_SECONDS * 1000;
@@ -26,21 +42,21 @@ export async function runMonitorTick(now = new Date()) {
     .select('_id')
     .limit(500)
     .lean();
-  for (const a of expired) {
+  await forEachLimit(expired, CONCURRENCY, async (a) => {
     const { finalized } = await finalizeAttempt(a._id, { status: ATTEMPT_STATUS.COMPLETED, submissionType: 'AUTO_TIMEOUT' });
     if (finalized) summary.expired += 1;
-  }
+  });
 
   const running = await Attempt.find({ status: ATTEMPT_STATUS.IN_PROGRESS })
     .select('lastHeartbeatAt connectionState policy awaySince awayEventId')
     .lean();
-  for (const a of running) {
+  await forEachLimit(running, CONCURRENCY, async (a) => {
     const awayFor = a.awaySince ? (now - a.awaySince) / 1000 : 0;
     if (awayFor >= AWAY_COUNT_SECONDS) {
       // Deduplicated by eventId, so later ticks and the student's return do not count it again.
       const res = await countAway(a._id, { key: a.awayEventId, seconds: awayFor });
       if (!res.duplicate) summary.away += 1;
-      if (res.terminated) continue;
+      if (res.terminated) return;
     }
     const silentFor = (now - (a.lastHeartbeatAt || now)) / 1000;
     if (a.policy.disconnectAction === 'TERMINATE' && silentFor > a.policy.maxDisconnectSeconds) {
@@ -67,7 +83,7 @@ export async function runMonitorTick(now = new Date()) {
       );
       if (res.modifiedCount) summary.disconnected += 1;
     }
-  }
+  });
 
   const unevaluated = await Attempt.find({
     status: { $in: [ATTEMPT_STATUS.COMPLETED, ATTEMPT_STATUS.TERMINATED] },
@@ -77,31 +93,35 @@ export async function runMonitorTick(now = new Date()) {
     .select('_id')
     .limit(200)
     .lean();
-  for (const a of unevaluated) {
+  await forEachLimit(unevaluated, CONCURRENCY, async (a) => {
     try {
       await evaluateAttempt(a._id);
       summary.reevaluated += 1;
     } catch (err) {
       logger.error({ err, attemptId: String(a._id) }, 'Re-evaluation failed');
     }
-  }
+  });
   return summary;
 }
 
 let lastOpportunisticRun = 0;
+let opportunisticRunning = false;
 
 /**
- * Serverless deployments have no background timer, so admin requests run the monitor
- * at most once every 20 s per instance (plus a daily Vercel cron as a backstop).
+ * Serverless deployments have no background timer, so admin requests start the monitor (without
+ * waiting for it) at most once every 20 s per instance (plus a daily Vercel cron as a backstop).
  * Student APIs already enforce expiry on every request, so students never depend on this.
  */
 export async function maybeRunMonitorTick() {
-  if (Date.now() - lastOpportunisticRun < 20000) return;
+  if (opportunisticRunning || !isDbReady() || Date.now() - lastOpportunisticRun < 20000) return;
   lastOpportunisticRun = Date.now();
+  opportunisticRunning = true;
   try {
     await runMonitorTick();
   } catch (err) {
     logger.error({ err }, 'Opportunistic monitor tick failed');
+  } finally {
+    opportunisticRunning = false;
   }
 }
 

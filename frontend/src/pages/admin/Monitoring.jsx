@@ -28,7 +28,8 @@ export default function Monitoring() {
   }, []);
 
   const load = useCallback(async () => {
-    if (inFlight.current) return;
+    // Skip while a request is still running, or while this tab is in the background.
+    if (inFlight.current || document.visibilityState === 'hidden') return;
     inFlight.current = true;
     try {
       const res = await adminApi.get('/admin/monitoring', { params: { exam: exam || undefined } });
@@ -45,7 +46,12 @@ export default function Monitoring() {
   useEffect(() => {
     load();
     const t = setInterval(load, REFRESH_MS);
-    return () => clearInterval(t);
+    const onVisible = () => document.visibilityState === 'visible' && load();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [load]);
 
   const terminate = async () => {

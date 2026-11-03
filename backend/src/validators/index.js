@@ -20,7 +20,10 @@ export const phone = z
   .string()
   .trim()
   .transform((v) => v.replace(/[\s\-().]/g, ''))
-  .refine((v) => /^\+?[0-9]{10,15}$/.test(v), 'Enter a valid phone number (10-15 digits)');
+  .refine((v) => /^[0-9]{10}$/.test(v), 'Enter a valid 10-digit phone number');
+
+/** Matches a 10-digit phone and the "+91…" / "91…" forms stored before 10 digits were required. */
+export const phoneMatch = (p) => ({ $in: [p, `+91${p}`, `91${p}`] });
 
 // ---------- Admin auth ----------
 export const adminLoginSchema = z.object({ email, password: z.string().min(1, 'Password is required').max(128) });
@@ -116,12 +119,20 @@ export const registrationSchema = z.object({
   universityName: z.string().trim().min(2, 'University name is required').max(200),
   phone,
   email,
+  enrollmentNumber: z
+    .string({ required_error: 'Enrollment number is required' })
+    .trim()
+    .min(1, 'Enrollment number is required')
+    .max(50)
+    .regex(/^[A-Za-z0-9/_-]+$/, 'Enrollment number may contain letters, digits, /, _ and - only'),
+});
+
+// Admins may still edit older students who registered before the enrollment number was required.
+export const studentUpdateSchema = registrationSchema.extend({
   enrollmentNumber: emptyToUndef(
     z.string().trim().max(50).regex(/^[A-Za-z0-9/_-]+$/, 'Enrollment number may contain letters, digits, /, _ and - only').optional(),
   ),
 });
-
-export const studentUpdateSchema = registrationSchema;
 
 export const universitySchema = z.object({
   name: z.string().trim().min(2, 'University name is required').max(200).transform((v) => v.replace(/\s+/g, ' ')),
