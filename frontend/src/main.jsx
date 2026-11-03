@@ -5,6 +5,9 @@ import App from './App.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import { ToastProvider } from './context/ToastContext.jsx';
 import './index.css';
+import { registerServiceWorker } from './pwa/install.js';
+
+registerServiceWorker();
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

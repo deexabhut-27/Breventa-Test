@@ -1,5 +1,6 @@
 import { Globe, Mail, Phone } from 'lucide-react';
 import { COMPANY } from '../../lib/company.js';
+import InstallAppButton from '../../components/InstallAppButton.jsx';
 
 export default function StudentShell({ title, children, wide = false, hideFooter = false }) {
   return (
@@ -9,7 +10,10 @@ export default function StudentShell({ title, children, wide = false, hideFooter
           <a href={COMPANY.website} target="_blank" rel="noreferrer" className="shrink-0" aria-label={COMPANY.legalName}>
             <img src={COMPANY.logo} alt={COMPANY.legalName} className="h-8 w-auto sm:h-10" />
           </a>
-          {title && <p className="hidden min-w-0 truncate text-right text-sm font-medium text-slate-600 sm:block">{title}</p>}
+          <div className="flex min-w-0 items-center gap-3">
+            {title && <p className="hidden min-w-0 truncate text-right text-sm font-medium text-slate-600 sm:block">{title}</p>}
+            <InstallAppButton />
+          </div>
         </div>
       </header>
       <main className={`mx-auto w-full flex-1 py-5 sm:py-8 ${wide ? 'px-4 sm:px-8 lg:px-12' : 'max-w-xl px-4'}`}>{children}</main>
