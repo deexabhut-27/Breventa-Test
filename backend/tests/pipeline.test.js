@@ -46,7 +46,7 @@ describe('selection pipeline', () => {
     const b = await candidate(2);
     await candidate(1);
     const term = await startExam(exam);
-    for (let i = 0; i < 4; i += 1) {
+    for (let i = 0; i < 3; i += 1) { // 75%: below the 100% pass mark, so it stays in Online test
       const c = await correctDisplayedOption(term.payload.attemptId, i);
       await api().put(`/api/student/attempt/responses/${i}`).set(term.headers).send({ selectedOption: c, seq: i + 1 });
     }
@@ -214,13 +214,13 @@ describe('pass mark and automatic Round 2', () => {
     const manual = await take(2); // 50% (fails at 60) - moved to Round 2 by hand
     await decide(manual, { decision: 'ADVANCE', expectedStage: 'ONLINE_TEST' });
 
-    // Raise to 80%: 75% no longer passes and moves back; the manual move is untouched.
+    // Raise to 80%: 75% and the hand-moved 50% no longer pass, so both move back.
     let res = await api().put(`/api/admin/exams/${passExam._id}`).set(sa.auth).send(examBody(80));
     expect(res.status).toBe(200);
-    expect(res.body.data.passMarkUpdate).toMatchObject({ qualified: 0, movedBack: 1 });
+    expect(res.body.data.passMarkUpdate).toMatchObject({ qualified: 0, movedBack: 2 });
     expect((await Student.findById(mid)).stage).toBe('ONLINE_TEST');
     expect((await Student.findById(top)).stage).toBe('ROUND_2');
-    expect((await Student.findById(manual)).stage).toBe('ROUND_2');
+    expect((await Student.findById(manual)).stage).toBe('ONLINE_TEST');
     const results = await api().get(`/api/admin/results?exam=${passExam._id}&sortBy=percentage&sortOrder=desc`).set(sa.auth);
     expect(results.body.data.map((r) => [r.percentage, r.passed, r.passPercentage])).toEqual([
       [100, true, 80],
@@ -229,27 +229,63 @@ describe('pass mark and automatic Round 2', () => {
       [25, false, 80],
     ]);
 
-    // Lower to 20%: everyone passes; those still in Online test qualify automatically.
+    // Lower to 20%: everyone passes; all of them are in Round 2 again.
     res = await api().put(`/api/admin/exams/${passExam._id}`).set(sa.auth).send(examBody(20));
-    expect(res.body.data.passMarkUpdate).toMatchObject({ qualified: 2, movedBack: 0 });
+    expect(res.body.data.passMarkUpdate).toMatchObject({ qualified: 3, movedBack: 0 });
     expect((await Student.findById(low)).stage).toBe('ROUND_2');
+    expect((await Student.findById(mid)).stage).toBe('ROUND_2');
+    expect((await Student.findById(manual)).stage).toBe('ROUND_2');
+
+    // Back to 60%: 25% and 50% fail again and return to Online test.
+    res = await api().put(`/api/admin/exams/${passExam._id}`).set(sa.auth).send(examBody(60));
+    expect(res.body.data.passMarkUpdate).toMatchObject({ qualified: 0, movedBack: 2 });
+    expect((await Student.findById(low)).stage).toBe('ONLINE_TEST');
+    expect((await Student.findById(manual)).stage).toBe('ONLINE_TEST');
     expect((await Student.findById(mid)).stage).toBe('ROUND_2');
   });
 
-  it('never auto-moves candidates a person has decided on', async () => {
+  it('keeps hand decisions on new results, but a pass-mark change re-decides Online test vs Round 2', async () => {
     const rejected = await take(3);
     await decide(rejected, { decision: 'REJECT', expectedStage: 'ROUND_2' });
+    const final = await take(1); // 25%, fails, but a person took them to the final round
+    await decide(final, { decision: 'ADVANCE', expectedStage: 'ONLINE_TEST' });
+    await decide(final, { decision: 'ADVANCE', expectedStage: 'ROUND_2' });
     const heldBack = await take(3);
     await decide(heldBack, { decision: 'REVERT', expectedStage: 'ROUND_2' }); // a person moved them back
-    await api().put(`/api/admin/exams/${passExam._id}`).set(sa.auth).send(examBody(10));
-    expect((await Student.findById(rejected)).stage).toBe('REJECTED');
     expect((await Student.findById(heldBack)).stage).toBe('ONLINE_TEST');
+
+    await api().put(`/api/admin/exams/${passExam._id}`).set(sa.auth).send(examBody(70));
+    expect((await Student.findById(rejected)).stage).toBe('REJECTED');
+    expect((await Student.findById(final)).stage).toBe('FINAL_ROUND');
+    expect((await Student.findById(heldBack)).stage).toBe('ROUND_2'); // 75% passes the new mark
   });
 
-  it('keeps terminated attempts as not passed whatever the pass mark', async () => {
+  it('judges terminated attempts by their score too', async () => {
+    const s = await startExam(passExam);
+    for (let i = 0; i < 3; i += 1) {
+      const c = await correctDisplayedOption(s.payload.attemptId, i);
+      await api().put(`/api/student/attempt/responses/${i}`).set(s.headers).send({ selectedOption: c, seq: i + 1 });
+    }
+    await api().post('/api/student/attempt/violations').set(s.headers).send({ type: 'SCREENSHOT_ATTEMPT' });
+    // 75% before termination, pass mark 60%: passes and goes to Round 2.
+    let r = await api().get(`/api/admin/results?exam=${passExam._id}`).set(sa.auth);
+    expect(r.body.data[0]).toMatchObject({ status: 'TERMINATED', passed: true, percentage: 75 });
+    expect((await Student.findById(s.student.id)).stage).toBe('ROUND_2');
+
+    // Raise to 80%: now fails and moves back.
+    await api().put(`/api/admin/exams/${passExam._id}`).set(sa.auth).send(examBody(80));
+    r = await api().get(`/api/admin/results?exam=${passExam._id}`).set(sa.auth);
+    expect(r.body.data[0]).toMatchObject({ status: 'TERMINATED', passed: false });
+    expect((await Student.findById(s.student.id)).stage).toBe('ONLINE_TEST');
+
+    // Lower to 50%: passes again.
+    await api().put(`/api/admin/exams/${passExam._id}`).set(sa.auth).send(examBody(50));
+    expect((await Student.findById(s.student.id)).stage).toBe('ROUND_2');
+  });
+
+  it('fails a terminated attempt with too few answers', async () => {
     const s = await startExam(passExam);
     await api().post('/api/student/attempt/violations').set(s.headers).send({ type: 'SCREENSHOT_ATTEMPT' });
-    await api().put(`/api/admin/exams/${passExam._id}`).set(sa.auth).send(examBody(0));
     const r = await api().get(`/api/admin/results?exam=${passExam._id}`).set(sa.auth);
     expect(r.body.data[0]).toMatchObject({ status: 'TERMINATED', passed: false });
     expect((await Student.findById(s.student.id)).stage).toBe('ONLINE_TEST');

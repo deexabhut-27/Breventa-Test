@@ -10,9 +10,12 @@ const SYSTEM = { name: 'System (pass mark)' };
  *  - a candidate still in "Online test" whose latest result passes moves to Round 2 (autoQualified);
  *  - a candidate who was auto-qualified but no longer passes (pass mark raised) moves back.
  * Candidates moved, rejected or selected by a person are never touched.
+ * With `force` (an admin changed the pass mark) the pass mark decides for everyone in
+ * Online test and Round 2, including candidates moved there by hand; Final round,
+ * Selected and Rejected candidates are still never touched.
  * Every move is a conditional update plus a note, so it is safe alongside admins' own decisions.
  */
-export async function syncAutoQualification(examId, { studentIds, known } = {}) {
+export async function syncAutoQualification(examId, { studentIds, known, force = false } = {}) {
   const match = { examination: new mongoose.Types.ObjectId(String(examId)) };
   if (studentIds) match.student = { $in: studentIds.map((id) => new mongoose.Types.ObjectId(String(id))) };
   // A just-evaluated result is the student's latest, so it can be used without a query.
@@ -30,8 +33,8 @@ export async function syncAutoQualification(examId, { studentIds, known } = {}) 
   for (const r of latest) {
     if (r.passed) {
       const s = await Student.findOneAndUpdate(
-        { _id: r._id, stage: { $in: ['ONLINE_TEST', null] }, autoHold: { $ne: true } },
-        { $set: { stage: 'ROUND_2', autoQualified: true, stageUpdatedAt: now, stageUpdatedBy: SYSTEM } },
+        { _id: r._id, stage: { $in: ['ONLINE_TEST', null] }, ...(force ? {} : { autoHold: { $ne: true } }) },
+        { $set: { stage: 'ROUND_2', autoQualified: true, autoHold: false, stageUpdatedAt: now, stageUpdatedBy: SYSTEM } },
         { new: true, projection: { examination: 1 } },
       );
       if (s) {
@@ -43,15 +46,17 @@ export async function syncAutoQualification(examId, { studentIds, known } = {}) 
           stage: 'ONLINE_TEST',
           fromStage: 'ONLINE_TEST',
           toStage: 'ROUND_2',
-          text: `Automatically qualified for Round 2: passed the online test with ${r.percentage}% (pass mark ${r.passPercentage}%)`,
+          text: force
+            ? `Moved to Round 2: pass mark is now ${r.passPercentage}% and the score was ${r.percentage}%`
+            : `Automatically qualified for Round 2: passed the online test with ${r.percentage}% (pass mark ${r.passPercentage}%)`,
           plain: `Automatically qualified for Round 2 (${r.percentage}%)`,
           author: SYSTEM,
         });
       }
     } else {
       const s = await Student.findOneAndUpdate(
-        { _id: r._id, stage: 'ROUND_2', autoQualified: true },
-        { $set: { stage: 'ONLINE_TEST', autoQualified: false, stageUpdatedAt: now, stageUpdatedBy: SYSTEM } },
+        { _id: r._id, stage: 'ROUND_2', ...(force ? {} : { autoQualified: true }) },
+        { $set: { stage: 'ONLINE_TEST', autoQualified: false, autoHold: false, stageUpdatedAt: now, stageUpdatedBy: SYSTEM } },
         { new: true, projection: { examination: 1 } },
       );
       if (s) {
@@ -75,8 +80,9 @@ export async function syncAutoQualification(examId, { studentIds, known } = {}) 
 
 /**
  * Applies a (new) pass mark to an examination after the fact: re-marks every finished result
- * Pass/Fail, keeps attempts' snapshot in line (so re-evaluation agrees), then re-syncs Round 2.
- * Terminated attempts always stay "not passed".
+ * Pass/Fail, keeps attempts' snapshot in line (so re-evaluation agrees), then re-syncs Round 2:
+ * passing students in Online test move up, failing students in Round 2 move back.
+ * Terminated attempts follow the same rule, scored on the answers saved before termination.
  */
 export async function applyPassMark(exam) {
   const pass = exam.passPercentage;
@@ -84,13 +90,14 @@ export async function applyPassMark(exam) {
     {
       $set: {
         passPercentage: pass,
-        passed: { $and: [{ $eq: ['$status', 'COMPLETED'] }, { $gte: ['$percentage', pass] }] },
+        passed: { $and: [{ $in: ['$status', ['COMPLETED', 'TERMINATED']] }, { $gte: ['$percentage', pass] }] },
       },
     },
   ]);
   await Attempt.updateMany({ examination: exam._id }, { $set: { 'policy.passPercentage': pass } });
   await refreshLatestResults({ examId: exam._id });
-  const pipeline = await syncAutoQualification(exam._id);
+  // The admin changed the pass mark on purpose, so it re-decides Online test vs Round 2 for everyone.
+  const pipeline = await syncAutoQualification(exam._id, { force: true });
   logger.info({ exam: String(exam._id), pass, results: results.modifiedCount, ...pipeline }, 'Pass mark applied');
   return { resultsUpdated: results.modifiedCount, ...pipeline };
 }

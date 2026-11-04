@@ -254,7 +254,7 @@ export default function ExamEditor() {
             {form.negativeMarking.enabled && form.markingScheme === 'QUESTION' && <p className="self-end text-xs text-slate-500">Each question's own negative marks will be deducted.</p>}
             <Field
               label="Pass percentage"
-              hint="Can be changed any time, even after the test: results are re-marked Pass/Fail and students who pass move to Round 2 automatically (auto-qualified students who no longer pass move back)."
+              hint="Can be changed any time, even after the test: results are re-marked Pass/Fail and students who now pass move to Round 2 and Round 2 students who now fail move back to Online test. Final round, Selected and Rejected candidates are not changed."
             >
               <Input type="number" min="0" max="100" value={form.passPercentage} onChange={(e) => set('passPercentage', e.target.value)} />
             </Field>

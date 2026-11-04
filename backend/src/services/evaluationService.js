@@ -87,7 +87,8 @@ export async function evaluateAttempt(attemptId) {
   const responseMap = new Map(responses.map((r) => [String(r.question), r.selectedOption]));
 
   const { totals, scores, categoryScores, percentage } = computeScore(attempt.questions, answerKey, responseMap);
-  const passed = attempt.status === ATTEMPT_STATUS.COMPLETED && percentage >= attempt.policy.passPercentage;
+  // Terminated attempts are judged on the answers saved before termination, like completed ones.
+  const passed = [ATTEMPT_STATUS.COMPLETED, ATTEMPT_STATUS.TERMINATED].includes(attempt.status) && percentage >= attempt.policy.passPercentage;
   const endedAt = attempt.endedAt || new Date();
 
   const result = await Result.findOneAndUpdate(

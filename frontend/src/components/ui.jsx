@@ -117,7 +117,14 @@ export function StatusBadge({ status }) {
 }
 export function ResultBadge({ result }) {
   if (!result) return <Badge>—</Badge>;
-  if (result.status === 'TERMINATED') return <Badge color="red">Terminated</Badge>;
+  if (result.status === 'TERMINATED') {
+    return (
+      <span className="inline-flex flex-wrap gap-1">
+        <Badge color="red">Terminated</Badge>
+        {result.passed ? <Badge color="green">Pass</Badge> : <Badge color="amber">Fail</Badge>}
+      </span>
+    );
+  }
   return result.passed ? <Badge color="green">Pass</Badge> : <Badge color="amber">Fail</Badge>;
 }
 

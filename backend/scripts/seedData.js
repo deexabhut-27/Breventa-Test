@@ -1,4 +1,7 @@
-// Sample question bank: 24 Easy, 28 Medium, 8 Hard/Tricky (60 total). Verbal Ability is all Medium.
+// Sample question bank: 60 Easy, 75 Medium, 30 Hard/Tricky (165 total). Verbal Ability is all Medium.
+// The base set is below; more questions live in moreQuestions.js.
+import { moreEasy, moreHard, moreMedium } from './moreQuestions.js';
+
 // Format: [text, [A, B, C, D], correctIndex, explanation]
 const QA = 'Quantitative Aptitude';
 const LR = 'Logical Reasoning';
@@ -117,7 +120,14 @@ function expand(group, difficulty) {
   );
 }
 
-export const sampleQuestions = [...expand(easy, 'EASY'), ...expand(medium, 'MEDIUM'), ...expand(hard, 'HARD')];
+export const sampleQuestions = [
+  ...expand(easy, 'EASY'),
+  ...expand(moreEasy, 'EASY'),
+  ...expand(medium, 'MEDIUM'),
+  ...expand(moreMedium, 'MEDIUM'),
+  ...expand(hard, 'HARD'),
+  ...expand(moreHard, 'HARD'),
+];
 
 export const defaultExam = {
   title: 'Campus Placement Aptitude Test',
@@ -130,7 +140,7 @@ export const defaultExam = {
     'The examination is submitted automatically when the timer reaches zero.',
   ].join('\n'),
   durationMinutes: 60,
-  distribution: { easy: 24, medium: 28, hard: 8 },
+  distribution: { easy: 10, medium: 15, hard: 5 },
   markingScheme: 'EXAM',
   marksPerQuestion: 1,
   negativeMarking: { enabled: true, marks: 0.25 },

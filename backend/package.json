@@ -15,6 +15,7 @@
     "seed:admin": "node scripts/seed.js --admin-only",
     "test": "vitest run",
     "loadtest": "node scripts/loadTest.js",
+    "questions:add": "node scripts/addQuestions.js",
     "test:watch": "vitest",
     "admin:reset": "node scripts/resetAdminPassword.js",
     "admin:create": "node scripts/createAdmin.js"

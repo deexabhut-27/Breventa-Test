@@ -62,7 +62,7 @@ export const toResultRow = (r) => ({
   totalScore: r.totalScore,
   maxScore: r.maxScore,
   percentage: r.percentage,
-  result: r.status === 'TERMINATED' ? 'TERMINATED' : r.passed ? 'PASS' : 'FAIL',
+  result: r.status === 'TERMINATED' ? `TERMINATED (${r.passed ? 'PASS' : 'FAIL'})` : r.passed ? 'PASS' : 'FAIL',
   status: r.status,
   violationCount: r.violationCount ?? 0,
   terminationReason: r.terminationReason || '',

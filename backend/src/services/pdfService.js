@@ -119,7 +119,7 @@ export function writeStudentReport(res, result, attempt) {
   const doc = createDoc(res, { title, filename: `result-${(result.studentName || 'student').replace(/\W+/g, '_')}.pdf` });
 
   const passColor = result.status === 'TERMINATED' ? '#b91c1c' : result.passed ? '#15803d' : '#b45309';
-  const verdict = result.status === 'TERMINATED' ? 'TERMINATED' : result.passed ? 'PASS' : 'FAIL';
+  const verdict = result.status === 'TERMINATED' ? `TERMINATED · ${result.passed ? 'PASS' : 'FAIL'}` : result.passed ? 'PASS' : 'FAIL';
   doc.font('Helvetica-Bold').fontSize(18).fillColor('#0f172a').text(result.studentName || '-', 40, 80);
   doc.font('Helvetica').fontSize(10).fillColor(MUTED).text(result.examTitle || '');
   const boxY = 80;
@@ -215,7 +215,7 @@ const resultColumns = [
     header: 'Result',
     width: 0.9,
     align: 'center',
-    get: (r) => (r.status === 'TERMINATED' ? 'TERMINATED' : r.passed ? 'PASS' : 'FAIL'),
+    get: (r) => (r.status === 'TERMINATED' ? `TERM. ${r.passed ? 'PASS' : 'FAIL'}` : r.passed ? 'PASS' : 'FAIL'),
     color: (v) => (v === 'PASS' ? '#15803d' : v === 'FAIL' ? '#b45309' : '#b91c1c'),
   },
 ];
