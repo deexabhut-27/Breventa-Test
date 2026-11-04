@@ -5,6 +5,7 @@ import { Button, Modal, Spinner, cx } from '../../components/ui.jsx';
 import { SaveQueue } from '../../exam/saveQueue.js';
 import { useProctoring } from '../../exam/useProctoring.js';
 import { useServerTimer } from '../../exam/useServerTimer.js';
+import { useWakeLock } from '../../exam/useWakeLock.js';
 import { errorCode, errorMessage, isNetworkError, studentApi, studentStore } from '../../lib/api.js';
 import { fmtClock } from '../../lib/format.js';
 
@@ -235,6 +236,9 @@ export default function ExamRoom() {
     [api, finish, handleApiError],
   );
   const log = useCallback((type, reason) => api.post('/student/attempt/violations', { type, reason }).catch(() => {}), [api]);
+
+  // Keep the screen/PC awake during the exam, even with no mouse or keyboard activity.
+  useWakeLock(phase === 'active');
 
   useProctoring({
     enabled: phase === 'active',
